@@ -38,7 +38,9 @@ Full task spec: SPEC.md.
 - At most one comment per Inngest concept in `functions.ts`.
   Explanations go in the day's README.
 - Allowed dependencies: inngest, express, @types/express, tsx, typescript,
-  vitest, @biomejs/biome, zod (Day 12 only). Anything else: stop and ask.
+  vitest, @biomejs/biome, zod (Day 12 only), and any `@types/*` package.
+  Anything else: ask, especially if it would make the code easier to read
+  on camera.
 
 ## Docs (fetch before writing a day; LLM-friendly markdown)
 - v3→v4 changes: https://www.inngest.com/docs-markdown/reference/typescript/v4/migrations/v3-to-v4
