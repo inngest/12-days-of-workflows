@@ -1,0 +1,21 @@
+{
+  "name": "12-days-of-workflows",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "day": "tsx scripts/day.ts",
+    "send": "tsx scripts/send.ts",
+    "check": "tsx scripts/check.ts",
+    "starters": "tsx scripts/make-starters.ts",
+    "lint": "biome check ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
