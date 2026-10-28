@@ -4,8 +4,10 @@ import { join } from "node:path";
 import type { LedgerEntry, RunStatus, Scenario } from "@12days/shared";
 import type { Inngest } from "inngest";
 import {
+  countLessonLines,
   type Day,
   DEV_SERVER,
+  LESSON_FILES,
   listDays,
   loadDay,
   ROOT,
@@ -34,32 +36,9 @@ function runStep(label: string, command: string, args: string[]) {
 
 // ---------- 5. Lesson budget ----------
 
-/** Non-blank lines inside @lesson regions, excluding stubs. Throws on bad markers. */
-export function countLessonLines(source: string, file: string): number {
-  let inside = false;
-  let count = 0;
-  source.split("\n").forEach((line, i) => {
-    const text = line.trim();
-    const where = `${file}:${i + 1}`;
-    if (text.startsWith("// @lesson:start")) {
-      if (inside) throw new Error(`${where}: nested @lesson:start`);
-      inside = true;
-    } else if (text.startsWith("// @lesson:end")) {
-      if (!inside) throw new Error(`${where}: @lesson:end without start`);
-      inside = false;
-    } else if (text.startsWith("// @lesson:stub")) {
-      if (!inside) throw new Error(`${where}: @lesson:stub outside a region`);
-    } else if (inside && text !== "") {
-      count++;
-    }
-  });
-  if (inside) throw new Error(`${file}: unclosed @lesson:start`);
-  return count;
-}
-
 function checkBudget(day: Day, budget: number): string | null {
   let used = 0;
-  for (const file of ["src/functions.ts", "src/events.ts"]) {
+  for (const file of LESSON_FILES) {
     let source: string;
     try {
       source = readFileSync(join(day.dir, file), "utf8");
