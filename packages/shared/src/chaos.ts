@@ -32,7 +32,27 @@ export const chaosMiddleware = class ChaosMiddleware extends Middleware.BaseMidd
   wrapStepHandler({ ctx, next }: Middleware.WrapStepHandlerArgs) {
     return runStore.run(storeFrom(ctx), () => next());
   }
+
+  // Child runs (step.invoke, step.sendEvent) inherit this run's cardId and chaos.
+  transformStepInput(arg: Middleware.TransformStepInputArgs) {
+    // An invoke step's input is [{ function_id, payload: { data } }].
+    const [opts, ...rest] = arg.input as [{ payload?: { data?: Record<string, unknown> } }];
+    if (arg.stepInfo.stepType !== "invoke" || !opts?.payload) return arg;
+    const payload = { ...opts.payload, data: withRunStore(opts.payload.data) };
+    return { ...arg, input: [{ ...opts, payload }, ...rest] };
+  }
+
+  transformSendEvent(arg: Middleware.TransformSendEventArgs) {
+    return { ...arg, events: arg.events.map((e) => ({ ...e, data: withRunStore(e.data) })) };
+  }
 };
+
+/** Adds the current run's cardId and chaos to child event data, unless already set. */
+function withRunStore(data: Record<string, unknown> | undefined): Record<string, unknown> {
+  const store = runStore.getStore();
+  if (!store) return data ?? {};
+  return { cardId: store.cardId, chaos: store.chaos, ...data };
+}
 
 /** Internal: the cardId of the run currently executing, if any. */
 export function currentCardId(): string | undefined {

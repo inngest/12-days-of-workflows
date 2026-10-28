@@ -70,6 +70,14 @@ Full task spec: SPEC.md.
 - Allowed dependencies: inngest, express, @types/express, tsx, typescript,
   vitest, @biomejs/biome, zod (Day 12 only). Anything else: stop and ask.
 
+## On camera
+- Every day is a short video episode, so every scenario a README tells viewers
+  to run must resolve snappily: visibly done in under 60 s, ideally under 20 s.
+- Get slow behavior (retries, sleeps, timeouts, rate windows) down to seconds
+  with scenario `env` or config. Never make the viewer sit through it.
+- Can't make a lesson's scenario that fast without changing what it teaches:
+  stop and ask.
+
 ## Docs (fetch before writing a day; LLM-friendly markdown)
 - v3→v4 changes: https://www.inngest.com/docs-markdown/reference/typescript/v4/migrations/v3-to-v4
 - Retries: https://www.inngest.com/docs-markdown/durable-execution/guides-and-advanced/error-handling/retries
@@ -198,7 +206,7 @@ export function startServer(opts: {
 }): void;
 ```
 
-**Chaos.** Scenarios put a `Chaos` object in `event.data.chaos`. `chaosMiddleware` runs each function execution inside `AsyncLocalStorage.run()` with that object, and every fake reads it from there, so lesson code never passes it. Failure counters are keyed by `${cardId}:${provider}` and fail the first `failTimes` calls. Fetch the [v4 middleware lifecycle docs](https://www.inngest.com/docs-markdown/reference/typescript/v4/middleware/lifecycle) first; if v4 middleware cannot wrap execution this way, stop and ask.
+**Chaos.** Scenarios put a `Chaos` object in `event.data.chaos`. `chaosMiddleware` runs each function execution inside `AsyncLocalStorage.run()` with that object, and every fake reads it from there, so lesson code never passes it. Child runs started with `step.invoke` or `step.sendEvent` inherit the parent's `cardId` and `chaos` (added in Phase 3). Failure counters are keyed by `${cardId}:${provider}` and fail the first `failTimes` calls. Fetch the [v4 middleware lifecycle docs](https://www.inngest.com/docs-markdown/reference/typescript/v4/middleware/lifecycle) first; if v4 middleware cannot wrap execution this way, stop and ask.
 
 **Server.** `startServer` mounts `serve()` at `/api/inngest` with `express.json({ limit: "1mb" })`, plus two test-only routes: `GET /__ledger` returns `entries()` and `DELETE /__ledger` calls `reset()`. `pnpm check` uses them to assert on side effects.
 
@@ -233,8 +241,8 @@ export type Scenario = {
     sleep: (ms: number) => Promise<void>;
   }) => Promise<string[]>;                   // ids of every event sent
   expect: {
-    settleMs: number;                        // wait this long before asserting
-    runs?: { fn: string; status: RunStatus; count?: number }[];
+    settleMs: number;                        // deadline; see check.ts step 3
+    runs?: { fn: string; status: RunStatus; count?: number; output?: unknown }[]; // output: JSON-equal to every matching run
     ledger?: Record<`${string}.${string}`, number>; // exact call counts, e.g. "llm.writeCard": 1
     deliveredOrder?: string[];               // cardIds, from mail ledger entries
     custom?: (ledger: LedgerEntry[]) => string | null; // null = pass
@@ -269,7 +277,7 @@ export type Scenario = {
 
 1. Run `tsc -b` and `biome check` across the workspace. Stop on failure.
 2. For each selected day, in order: start the app and a fresh Dev Server (as `day.ts` does) and wait until `GET /api/inngest` responds and the app is synced.
-3. For each scenario: `DELETE /__ledger`, run `send`, wait `settleMs`, then assert `expect` against `GET /__ledger` and the Dev Server's runs.
+3. For each scenario: `DELETE /__ledger`, run `send`, then assert `expect` against `GET /__ledger` and the Dev Server's runs. If every expected run status is terminal, poll every 2 s and pass as soon as all expectations hold, failing at `settleMs`; if any expects `Running`, wait the full `settleMs` first (Phase 3: retry backoff jitters too much for fixed waits).
 4. If a scenario has `env`, restart the app with that env before running it.
 5. Enforce the lesson budget: count lines inside `@lesson` regions and fail if over `export const lessonBudget` in the day's `send.ts`.
 6. Print one line per scenario (`PASS 01 flaky-image 4.2s`), tear everything down, exit 1 on any failure.
@@ -337,7 +345,7 @@ Problem: some failures can never succeed and retrying them wastes time and money
 | `happy` | c1 | `create-card` Completed |
 | `grinch` | c1 with prompt containing “grinch” | `create-card` Failed within 15 s; `mail.notifySender` 1; `llm.writeCard` 0 |
 | `grinch-before` | same, to `.before` | after 15 s `create-card-before` still Running (retrying); `mail.notifySender` 0 |
-| `llm-429` | c1 with `chaos.llm: { failTimes: 1, status: 429, retryAfterMs: 5000 }` | Completed; `llm.writeCard` 2; custom: second call ≥ 5 s after first |
+| `llm-429` | c1 with `chaos.llm: { failTimes: 1, status: 429, retryAfterMs: 5000 }` | Completed; `llm.writeCard` 2; custom: second call 4–10 s after first (retries are scheduled to the second; default backoff would be ≥ 15 s) |
 
 `before.ts`: Day 1's function plus the moderation check throwing a plain `Error`.
 
@@ -387,7 +395,7 @@ Problem: one function owns text, image and delivery, so the flakiest dependency 
 | Scenario | Sends | Expect |
 | --- | --- | --- |
 | `happy` | c1 | `create-card` and `render-card-image` Completed |
-| `very-flaky-image` | c1 with `chaos.image.failTimes: 6` | both Completed; `image.renderImage` 7; `llm.writeCard` 1 |
+| `very-flaky-image` | c1 with `chaos.image.failTimes: 5` | both Completed; `image.renderImage` 6; `llm.writeCard` 1 |
 | `very-flaky-image-before` | same, to `.before` | `create-card-before` Failed (4 retries exhausted); `mail.sendCard` 0 |
 
 ```ts
@@ -429,7 +437,7 @@ Problem: the sender should approve the draft before it goes out, without a polli
 
 | Scenario | Env | Sends | Expect |
 | --- | --- | --- | --- |
-| `approve` | `DRAFT_TTL=30s` | c1, then `card/approved` c1 after 3 s | `create-card` Completed; `mail.sendCard` 1 |
+| `approve` | `DRAFT_TTL=30s` | c1, then `card/approved` c1 after 6 s (text + image take up to ~4 s; earlier approvals are missed) | `create-card` Completed; `mail.sendCard` 1 |
 | `ignore` | `DRAFT_TTL=5s` | c1 only | Completed with output `{ status: "expired" }` within 15 s; `mail.sendCard` 0 |
 | `approve-wrong-card` | `DRAFT_TTL=30s` | c1, then `card/approved` c2 | after 10 s still Running; `mail.sendCard` 0 |
 
@@ -463,7 +471,7 @@ Problem: cards go out on a specific date, abandoned drafts pile up, and a delete
 
 | Scenario | Sends | Expect |
 | --- | --- | --- |
-| `scheduled` | `card/approved` c1 with `deliverAt` = now + 5 s | `schedule-delivery` Completed; `mail.sendCard` 1; custom: delivery ≥ 5 s after send |
+| `scheduled` | `card/approved` c1 with `deliverAt` = now + 5 s | `schedule-delivery` Completed; `mail.sendCard` 1; custom: delivery ≥ 4 s after send (1 s slack: sleeps are scheduled to the second) |
 | `delete-before-delivery` | c1 with `deliverAt` = now + 10 s; `card/deleted` c1 after 2 s | `schedule-delivery` Cancelled; `mail.sendCard` 0 |
 | `delete-before-delivery-before` | same, to `.before` (no `cancelOn`) | `schedule-delivery-before` Completed; `mail.sendCard` 1 (the bug) |
 | `cleanup` | `drafts/cleanup.requested` | `cleanup-drafts` Completed |
@@ -506,8 +514,8 @@ Problem: one account sends a burst of cards and everyone else's single card wait
 
 | Scenario | Env | Sends | Expect |
 | --- | --- | --- | --- |
-| `noisy-neighbor` | `IMAGE_RATE=off` | 20 cards from account `a`, then `b1` from account `b` | all Completed within 60 s; custom: `b1` among the first 6 deliveries |
-| `noisy-neighbor-before` | `IMAGE_RATE=off` | same, to `.before` (no key) | custom: `b1` among the last 3 deliveries |
+| `noisy-neighbor` | `IMAGE_RATE=off` | 20 cards from account `a`, then `b1` from account `b` 2 s later | all Completed within 60 s; custom: `b1` among the first 6 deliveries |
+| `noisy-neighbor-before` | `IMAGE_RATE=off` | same, to `.before` (no key) | custom: `b1` delivered 13th or later (measured: 19th of 21) |
 
 `CardRequest` gains `accountId: string` from this day on. `IMAGE_RATE=off` keeps the image fake's rate limit out of the way until Day 7.
 
@@ -778,6 +786,11 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 - [ ] One day at a time, each fully passing before the next starts
 - [ ] Fetch the docs URLs for each day's primitive first; log any mismatch with this spec
 
+**Phase 3b: snappy rework (next task).** Gate: `pnpm check 01 03`, each README scenario visibly done in < 60 s
+
+- [ ] Rework Day 01 and Day 03 scenarios to meet the "On camera" rule (see "Snappy scenarios" under Stop and ask); propose the approach before changing lesson code
+- [ ] Re-run the full Phase 3 gate (`pnpm check 01 02 03 04 05 06`); its last run was interrupted by a reboot
+
 **Phase 4: Days 07–11.** Gate: `pnpm check 07 08 09 10 11`
 
 - [ ] Same rules as Phase 3
@@ -794,12 +807,13 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 
 **Open decisions**
 
-- [ ] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values (Phase 1, Dev Server 1.49.0, default `retries: 4`, retry gaps ~25–30 s, ~45 s, ~75–85 s, ~150 s with jitter): **2 failures → Completed after ~80–105 s; 4 failures → Completed after ~305 s; 6 failures → Failed (retries exhausted) after ~295 s.** Day 01's two-failure scenarios fit in a 120 s `settleMs`; Day 03's `very-flaky-image-before` (4 retries exhausted) needs ~5 min.
+- [ ] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values (Phase 1, Dev Server 1.49.0, default `retries: 4`, retry gaps ~25–30 s, ~45 s, ~75–85 s, ~150 s with jitter): **2 failures → Completed after ~80–105 s; 4 failures → Completed after ~305 s; 6 failures → Failed (retries exhausted) after ~295 s.** Day 01's two-failure scenarios fit in a 120 s `settleMs`; Day 03's `very-flaky-image-before` (4 retries exhausted) needs ~5 min. Phase 3 (Day 03, step-level failures): image attempts at ~4, 39, 93, 167, 309 s after send; the sixth succeeds at ~611 s and the default-retries run fails at ~324 s. Decision: Day 03 uses `failTimes: 5` (settle 720 s / 420 s) instead of 6 (~20+ min).
 - [ ] **Run lookups.** If the Dev Server has no function-level runs query, decide whether ledger-only assertions are enough for invoked, fan-out and `onFailure` runs.
 - [ ] **Day 12 surface.** Confirm whether the Dev Server shows experiment variants and scores, or whether the Day 12 demo needs Inngest Cloud (and therefore a signing key in the demo flow).
 - [ ] **Plan gating.** Priority, batching (`maxSize: 50` versus plan batch limits) and Agent Evals need a check against the pricing and packaging decision before Days 10–12 publish.
 - [ ] **Contest template.** Days run locally on Express; contest entries need a live deploy link. Decide whether a separate Vercel-ready template is in scope.
 - [ ] **Finale.** `finale/` stays an empty scaffold until the livestream build is specced.
+- [ ] **Snappy scenarios (added Phase 3).** The "On camera" rule wants every README scenario visibly done in under 60 s. Built days that break it today (measured): Day 01 `flaky-image` and `flaky-image-before` ~80–105 s (two default-backoff retries); Day 03 `very-flaky-image` ~10 min and `very-flaky-image-before` ~5.5 min (five failures). The Dev Server's retry backoff (~35 s, 55 s, 75 s, 140 s, 300 s gaps) is the bottleneck and isn't configurable from the SDK, so fixing these means fewer failures, a chaos status that maps to `RetryAfterError`, or cutting the shot in editing. Day 06 (~60 s for 21 cards) is borderline.
 
 **Always stop for**
 
@@ -821,4 +835,4 @@ For the humans planning the shoot. Claude Code ignores this section.
 
 - **Episode shape:** 60–90 s iPad architecture cold open, then the engineer talks Jason through the `starter` branch in picture-in-picture, ending on the `main` version of that day's folder.
 - **The “break it” shot** is a `-before` scenario in every day except 04 and 12. Run it on camera first.
-- **Short waits** come from scenario env (`DRAFT_TTL=5s`, `REACTION_TTL=60s`), so nothing on camera waits more than a minute.
+- **Short waits** come from scenario env (`DRAFT_TTL=5s`, `REACTION_TTL=60s`), so nothing on camera waits more than a minute. This is now a build rule ("On camera" in `CLAUDE.md`), not just a production note.

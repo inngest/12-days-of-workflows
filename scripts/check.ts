@@ -67,14 +67,14 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
 const RUNS_QUERY = `query Runs($from: Time!, $after: String) {
   runs(first: 200, after: $after, orderBy: [{ field: QUEUED_AT, direction: ASC }], filter: { from: $from }) {
     pageInfo { hasNextPage endCursor }
-    edges { node { id status output function { slug } } }
+    edges { node { id status function { slug } } }
   }
 }`;
 
 type RunsPage = {
   runs: {
     pageInfo: { hasNextPage: boolean; endCursor: string };
-    edges: { node: { id: string; status: string; output: unknown; function: { slug: string } } }[];
+    edges: { node: { id: string; status: string; function: { slug: string } } }[];
   };
 };
 
@@ -89,12 +89,27 @@ async function runsSince(from: string): Promise<Run[]> {
         id: node.id,
         status: node.status,
         slug: node.function.slug,
-        output: node.output,
+        output: undefined,
       });
     }
     after = page.runs.pageInfo.hasNextPage ? page.runs.pageInfo.endCursor : undefined;
   } while (after);
   return runs;
+}
+
+/**
+ * The runs list leaves `output` empty, so fetch it per run. With checkpointing the Dev Server
+ * stores it as ops, e.g. `[{"op":"RunComplete","data":{...}}]`; unwrap to the returned value.
+ */
+async function runOutput(id: string): Promise<unknown> {
+  const { run } = await gql<{ run: { output: string | null } }>(
+    "query Run($id: String!) { run(runID: $id) { output } }",
+    { id },
+  );
+  if (!run.output) return null;
+  const parsed: unknown = JSON.parse(run.output);
+  const op = Array.isArray(parsed) ? parsed.find((o) => o?.op === "RunComplete") : undefined;
+  return op ? op.data : parsed;
 }
 
 const STATUS: Record<string, RunStatus> = {
@@ -200,6 +215,13 @@ function assertScenario(
     } else if (mine.length === 0 || matching !== mine.length) {
       failures.push(`runs ${want.fn}: expected all ${want.status}, saw ${seen}`);
     }
+    if (want.output !== undefined) {
+      const wanted = JSON.stringify(want.output);
+      for (const run of mine) {
+        const got = JSON.stringify(run.output);
+        if (got !== wanted) failures.push(`runs ${want.fn}: expected output ${wanted}, got ${got}`);
+      }
+    }
   }
 
   for (const [key, want] of Object.entries(expect.ledger ?? {})) {
@@ -234,20 +256,42 @@ async function runScenario(
   await harness.resetLedger();
   const from = new Date(Date.now() - 1000).toISOString();
   const ids = await scenario.send({ inngest, sleep });
-  await sleep(scenario.expect.settleMs);
+  const deadline = Date.now() + scenario.expect.settleMs;
 
-  const failures = ids.length === 0 ? ["send returned no event ids"] : [];
-  failures.push(
-    ...assertScenario(
-      scenario.expect,
-      harness.appId,
-      await harness.ledger(),
-      await runsSince(from),
-    ),
-  );
+  // Retry backoff jitters a lot, so scenarios that only expect finished runs pass as soon as
+  // everything holds, with settleMs as the deadline. "Still Running" needs the full wait.
+  const wantedRuns = scenario.expect.runs ?? [];
+  const canFinishEarly = wantedRuns.length > 0 && wantedRuns.every((r) => r.status !== "Running");
+
+  let failures: string[];
+  for (;;) {
+    if (!canFinishEarly) await sleep(deadline - Date.now());
+    failures = await evaluateScenario(harness, scenario, from);
+    if (failures.length === 0 || Date.now() >= deadline) break;
+    await sleep(Math.min(POLL_MS, deadline - Date.now()));
+  }
+
+  if (ids.length === 0) failures.unshift("send returned no event ids");
   // Leftover retries would write to the next scenario's ledger.
   await cancelUnfinished(from);
   return failures;
+}
+
+const POLL_MS = 2_000;
+
+async function evaluateScenario(
+  harness: DayHarness,
+  scenario: Scenario,
+  from: string,
+): Promise<string[]> {
+  const runs = await runsSince(from);
+  const wantsOutput = (scenario.expect.runs ?? []).filter((r) => r.output !== undefined);
+  for (const run of runs) {
+    if (wantsOutput.some((r) => run.slug === `${harness.appId}-${r.fn}`)) {
+      run.output = await runOutput(run.id);
+    }
+  }
+  return assertScenario(scenario.expect, harness.appId, await harness.ledger(), runs);
 }
 
 // ---------- Main ----------

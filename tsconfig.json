@@ -1,9 +1,32 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/shared" },
-    { "path": "finale" },
-    { "path": "scripts" },
-    { "path": "days/01-survive-failure" }
+    {
+      "path": "packages/shared"
+    },
+    {
+      "path": "finale"
+    },
+    {
+      "path": "scripts"
+    },
+    {
+      "path": "days/01-survive-failure"
+    },
+    {
+      "path": "days/02-fail-fast"
+    },
+    {
+      "path": "days/03-split-the-work"
+    },
+    {
+      "path": "days/04-wait-for-a-human"
+    },
+    {
+      "path": "days/05-deliver-on-the-25th"
+    },
+    {
+      "path": "days/06-one-user-per-lane"
+    }
   ]
 }
