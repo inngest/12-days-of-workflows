@@ -1,0 +1,114 @@
+import { type ChildProcess, spawn } from "node:child_process";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { Scenario } from "@12days/shared";
+import type { Inngest } from "inngest";
+
+export const ROOT = join(import.meta.dirname, "..");
+export const DEV_SERVER = "http://localhost:8288";
+
+export type Day = { nn: string; dir: string; port: number };
+
+export function listDays(): string[] {
+  return readdirSync(join(ROOT, "days"))
+    .filter((name) => /^\d\d-/.test(name))
+    .sort();
+}
+
+/** Resolves "1" or "01" to its `days/01-*` folder, or exits listing the days that exist. */
+export function resolveDay(input: string): Day {
+  const nn = input.padStart(2, "0");
+  const matches = listDays().filter((name) => name.startsWith(`${nn}-`));
+  if (matches.length !== 1) {
+    console.error(`No single day matches "${input}". Days:\n  ${listDays().join("\n  ")}`);
+    process.exit(1);
+  }
+  return { nn, dir: join(ROOT, "days", matches[0]), port: 3000 + Number(nn) };
+}
+
+/** Spawns a process in its own group, prefixing each output line with `[label]`. */
+export function spawnPrefixed(
+  label: string,
+  command: string,
+  args: string[],
+  opts: { cwd?: string; env?: Record<string, string>; onLine?: (line: string) => void } = {},
+): ChildProcess {
+  const child = spawn(command, args, {
+    cwd: opts.cwd ?? ROOT,
+    env: { ...process.env, ...opts.env },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+  for (const stream of [child.stdout, child.stderr]) {
+    let buffered = "";
+    stream?.on("data", (chunk: Buffer) => {
+      buffered += chunk.toString();
+      const lines = buffered.split("\n");
+      buffered = lines.pop() ?? "";
+      for (const line of lines) {
+        if (opts.onLine) opts.onLine(line);
+        else console.log(`[${label}] ${line}`);
+      }
+    });
+  }
+  return child;
+}
+
+type OutputOpts = { onLine?: (line: string) => void };
+
+export function startApp(
+  day: Day,
+  opts: OutputOpts & { watch?: boolean; env?: Record<string, string> } = {},
+) {
+  const args = opts.watch ? ["watch", "src/index.ts"] : ["src/index.ts"];
+  return spawnPrefixed("app", join(ROOT, "node_modules/.bin/tsx"), args, {
+    cwd: day.dir,
+    env: { ...opts.env, PORT: String(day.port), INNGEST_DEV: "1" },
+    onLine: opts.onLine,
+  });
+}
+
+export function startDevServer(days: Day[], opts: OutputOpts = {}) {
+  const urls = days.flatMap((day) => ["-u", `http://localhost:${day.port}/api/inngest`]);
+  return spawnPrefixed(
+    "dev",
+    "npx",
+    ["--yes", "--ignore-scripts=false", "inngest-cli@latest", "dev", "--no-discovery", ...urls],
+    { onLine: opts.onLine },
+  );
+}
+
+/** Kills a child's whole process group (tsx and npx both spawn grandchildren). */
+export function stop(child: ChildProcess): Promise<void> {
+  const pid = child.pid;
+  if (child.exitCode !== null || pid === undefined) return Promise.resolve();
+  return new Promise((resolve) => {
+    child.once("exit", () => resolve());
+    try {
+      process.kill(-pid, "SIGTERM");
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export async function waitFor(what: string, ready: () => Promise<boolean>, timeoutMs = 60_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await ready().catch(() => false)) return;
+    await sleep(250);
+  }
+  throw new Error(`Timed out after ${timeoutMs} ms waiting for ${what}`);
+}
+
+export type DayModule = { lessonBudget: number; scenarios: Record<string, Scenario> };
+
+/** Imports a day's client and its `send.ts`. Callers set INNGEST_DEV=1 first. */
+export async function loadDay(day: Day): Promise<{ inngest: Inngest; mod: DayModule }> {
+  const client = await import(pathToFileURL(join(day.dir, "src/client.ts")).href);
+  const mod: DayModule = await import(pathToFileURL(join(day.dir, "send.ts")).href);
+  return { inngest: client.inngest, mod };
+}

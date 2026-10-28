@@ -794,7 +794,7 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 
 **Open decisions**
 
-- [ ] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values: *pending Phase 1*.
+- [ ] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values (Phase 1, Dev Server 1.49.0, default `retries: 4`, retry gaps ~25–30 s, ~45 s, ~75–85 s, ~150 s with jitter): **2 failures → Completed after ~80–105 s; 4 failures → Completed after ~305 s; 6 failures → Failed (retries exhausted) after ~295 s.** Day 01's two-failure scenarios fit in a 120 s `settleMs`; Day 03's `very-flaky-image-before` (4 retries exhausted) needs ~5 min.
 - [ ] **Run lookups.** If the Dev Server has no function-level runs query, decide whether ledger-only assertions are enough for invoked, fan-out and `onFailure` runs.
 - [ ] **Day 12 surface.** Confirm whether the Dev Server shows experiment variants and scores, or whether the Day 12 demo needs Inngest Cloud (and therefore a signing key in the demo flow).
 - [ ] **Plan gating.** Priority, batching (`maxSize: 50` versus plan batch limits) and Agent Evals need a check against the pricing and packaging decision before Days 10–12 publish.

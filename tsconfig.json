@@ -1,4 +1,9 @@
 {
   "files": [],
-  "references": [{ "path": "packages/shared" }, { "path": "finale" }]
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "finale" },
+    { "path": "scripts" },
+    { "path": "days/01-survive-failure" }
+  ]
 }
