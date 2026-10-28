@@ -42,6 +42,12 @@ Full task spec: SPEC.md.
   Anything else: ask, especially if it would make the code easier to read
   on camera.
 
+## Build log
+- At the end of every phase, add a `## Phase N: <name>` section to
+  `BUILD_LOG.md`: 5–10 conversational bullets on what we built, what
+  surprised us, and the decisions we made. It feeds a blog post, so tell
+  the story; don't dump file lists, versions or test output.
+
 ## Docs (fetch before writing a day; LLM-friendly markdown)
 - v3→v4 changes: https://www.inngest.com/docs-markdown/reference/typescript/v4/migrations/v3-to-v4
 - Retries: https://www.inngest.com/docs-markdown/durable-execution/guides-and-advanced/error-handling/retries
