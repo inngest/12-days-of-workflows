@@ -23,3 +23,14 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Retries are slow on purpose. We measured the Dev Server: two failures take 80–105 s, and exhausting the default four retries takes about five minutes. Day 01's failure scenarios wait two minutes before asserting, so its check takes about four. Later "-before" days that exhaust retries will need a human call on speed.
 - Lost one measurement to our own tooling: auto-formatting the shared package made `tsx watch` restart the app mid-run, which wiped the in-memory failure counters. The rerun used a non-watch app.
 - Small spec gaps got the boring fix: `index.ts` serves the `-before` functions too, and scenarios send chaos as raw event data so `CardRequest` stays clean on camera.
+
+## Phase 2: starters and CI
+
+- The idea: viewers code along on a `starter` branch that's generated from `main`, never hand-edited, so the "before" and "after" can't drift apart. Every lesson region in `main` turns into a one-line `// TODO:` in the starter.
+- Stubs are what make that work. A region can carry a commented-out "naive" version (`// @lesson:stub ...`) that gets uncommented in the starter. Day 01's starter calls the LLM and image API directly with no steps, which is exactly the code the episode fixes.
+- The starter has to typecheck, so the script proves it: it builds the starter in a throwaway git worktree and runs `tsc -b` there. A starter that doesn't compile fails the script, and that almost always means a missing stub.
+- One parser now does two jobs. The marker rules that count lesson lines against each day's budget also rewrite the starter, so the budget and the starter can't disagree about what counts as "the lesson."
+- A small trap we avoided: the spec, `CLAUDE.md` and the check script all *mention* `@lesson` in their text. A naive "rewrite every file containing the marker" would have mangled them, so the rewrite only touches each day's `functions.ts` and `events.ts`, the two files where markers are allowed.
+- The script commits with git plumbing (`write-tree`, `commit-tree`, `update-ref`), so it never checks out a branch or touches your working tree. Running it twice in a row makes no second commit.
+- CI runs the full check on every push and PR, then refreshes the starter branch on `main`. Renovate watches only `inngest`, so each SDK release has to get through every day's scenarios before anyone merges it.
+- One subtlety: the starter is built from the last commit, not from uncommitted work. That's deliberate. The starter always matches something you can point to in `main`'s history.
