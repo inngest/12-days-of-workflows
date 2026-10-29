@@ -60,7 +60,7 @@ export async function renderImage(input: { text: string }): Promise<{ url: strin
       meta: { status: failure.status },
     });
     console.log(`${label} failed ${failure.status} (call #${call})`);
-    throw failure;
+    throw failure.error;
   }
 
   const url = `https://images.example.com/cards/${seed.toString(16)}.png`;

@@ -9,7 +9,8 @@ const card: CardRequest = {
   to: "jason@example.com",
 };
 
-const flakyImage: Chaos = { image: { failTimes: 2 } };
+// retryInMs makes each retry come about 1 s later, so the demo never waits on backoff.
+const flakyImage: Chaos = { image: { failTimes: 2, retryInMs: 1000 } };
 
 export const scenarios: Record<string, Scenario> = {
   happy: {
@@ -34,7 +35,7 @@ export const scenarios: Record<string, Scenario> = {
       return ids;
     },
     expect: {
-      settleMs: 120_000,
+      settleMs: 45_000,
       runs: [{ fn: "create-card", status: "Completed" }],
       ledger: { "llm.writeCard": 1, "image.renderImage": 3, "mail.sendCard": 1 },
     },
@@ -49,7 +50,7 @@ export const scenarios: Record<string, Scenario> = {
       return ids;
     },
     expect: {
-      settleMs: 120_000,
+      settleMs: 45_000,
       runs: [{ fn: "create-card-before", status: "Completed" }],
       ledger: { "llm.writeCard": 3, "image.renderImage": 3, "mail.sendCard": 1 },
     },

@@ -13,8 +13,8 @@ pnpm send 03 very-flaky-image-before
 ```
 
 The image service fails five times in a row. The step retries four times (the default), then the
-run fails and the card is never delivered. It takes about five minutes, because each retry waits
-longer than the last.
+run fails and the card is never delivered. The fake service asks Inngest to retry after one
+second, so this takes seconds. Normal backoff spreads the same retries over several minutes.
 
 ## Fix it
 
@@ -41,7 +41,7 @@ pnpm send 03 very-flaky-image
 ```
 
 The same five failures happen inside `render-card-image`, which keeps going and succeeds on the
-sixth try. The LLM still bills once. Expect about ten minutes, because the backoff keeps growing.
+sixth try. The LLM still bills once.
 
 ## Watch it
 

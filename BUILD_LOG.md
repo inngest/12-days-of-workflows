@@ -46,3 +46,13 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Day 04 nearly shipped a race. The approval was sent 3 s after the card, but writing text and rendering an image can take 4 s, and `waitForEvent` only sees events that arrive after it starts waiting. A demo that works on a fast run and silently hangs on a slow one is the worst kind, so the approval now waits until the draft is ready.
 - With checkpointing on, a run's output comes back from the Dev Server as a list of checkpoint ops rather than the plain return value, so the check unwraps the `RunComplete` op before comparing.
 - Day 06 was flaky until we copied real life. When 20 cards from one account and one from another land in the same millisecond, the scheduler sometimes delivered the lone card first, which wrecks the "noisy neighbor" story. Sending it two seconds after the burst, when a queue has actually formed, made the result steady: 3rd with a per-account key, 19th of 21 without.
+
+## Phase 3b: snappy rework
+
+- New rule for the shoot: every scenario a viewer runs must visibly finish in under a minute. Days 01 and 03 broke it badly, at about 90 seconds and up to 10 minutes, and all of that time was spent waiting on retries.
+- The Dev Server's exponential backoff (35 s, then 55 s, 75 s, 140 s, 300 s) is the right default in production and a disaster on camera, and nothing in the SDK changes it.
+- We weighed three options: fewer failures (Day 01 would bill the LLM twice instead of three times, and Day 03's "retries run out" story would fall apart), cutting the wait in editing, or bending time.
+- We bent time, using the tool Day 02 teaches. Chaos gained one opt-in knob, `retryInMs`. With it set, the fake service throws Inngest's `RetryAfterError` instead of a plain error, so every retry lands about a second later.
+- The lessons don't change at all. Day 01 still bills the LLM three times without steps, and Day 03 still exhausts four retries in the "before" and succeeds on the sixth try in the "after". The only difference is the clock: 10 s, 10 s, 20 s and 16 s.
+- There's an honesty cost: viewers see retries that are unrealistically fast. Each README owns that in one line, saying the fake asks for quick retries and normal backoff spreads them over minutes.
+- The knob is separate from Day 02's 429 scenario on purpose. There, the lesson code turns a provider's retry-after hint into `RetryAfterError`. If the fake did it for you, Day 02 would have nothing left to teach.

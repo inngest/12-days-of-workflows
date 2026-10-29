@@ -35,7 +35,7 @@ export async function writeCard(input: WriteCardInput): Promise<CardText> {
   if (failure) {
     record({ at: Date.now(), provider: "llm", op: "writeCard", cardId, ok: false, meta });
     console.log(`[llm] writeCard ${cardId ?? "-"} failed ${failure.status} (call #${call})`);
-    throw failure;
+    throw failure.error;
   }
 
   const pick = (list: string[]) => list[Math.floor(rng() * list.length)];

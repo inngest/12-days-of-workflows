@@ -14,6 +14,8 @@ pnpm send 01 flaky-image-before
 
 The image service fails twice. Watch the `[app]` log: `[llm] writeCard c1 billed …` shows up
 three times (`call #1`, `#2`, `#3`), once per retry, because the whole function reruns from the top.
+The fake service asks Inngest to retry after one second, so the demo is quick. Normal backoff spreads
+retries over minutes.
 
 ## Fix it
 

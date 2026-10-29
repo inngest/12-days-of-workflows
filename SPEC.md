@@ -187,6 +187,7 @@ export type ChaosSpec = {
   afterCalls?: number;   // …after letting this many succeed (default 0)
   status?: 429 | 500;
   retryAfterMs?: number;
+  retryInMs?: number;    // throw RetryAfterError instead, so retries land ~1 s apart (Phase 3b)
 };
 export type Chaos = { llm?: ChaosSpec; image?: ChaosSpec; mail?: ChaosSpec };
 export const chaosMiddleware: /* v4 middleware */ unknown;
@@ -786,10 +787,10 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 - [ ] One day at a time, each fully passing before the next starts
 - [ ] Fetch the docs URLs for each day's primitive first; log any mismatch with this spec
 
-**Phase 3b: snappy rework (next task).** Gate: `pnpm check 01 03`, each README scenario visibly done in < 60 s
+**Phase 3b: snappy rework.** Gate: `pnpm check 01 03`, each README scenario visibly done in < 60 s
 
-- [ ] Rework Day 01 and Day 03 scenarios to meet the "On camera" rule (see "Snappy scenarios" under Stop and ask); propose the approach before changing lesson code
-- [ ] Re-run the full Phase 3 gate (`pnpm check 01 02 03 04 05 06`); its last run was interrupted by a reboot
+- [x] Rework Day 01 and Day 03 scenarios to meet the "On camera" rule (see "Snappy scenarios" under Stop and ask); propose the approach before changing lesson code
+- [x] Re-run the full Phase 3 gate (`pnpm check 01 02 03 04 05 06`); its last run was interrupted by a reboot
 
 **Phase 4: Days 07–11.** Gate: `pnpm check 07 08 09 10 11`
 
@@ -807,13 +808,13 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 
 **Open decisions**
 
-- [ ] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values (Phase 1, Dev Server 1.49.0, default `retries: 4`, retry gaps ~25–30 s, ~45 s, ~75–85 s, ~150 s with jitter): **2 failures → Completed after ~80–105 s; 4 failures → Completed after ~305 s; 6 failures → Failed (retries exhausted) after ~295 s.** Day 01's two-failure scenarios fit in a 120 s `settleMs`; Day 03's `very-flaky-image-before` (4 retries exhausted) needs ~5 min. Phase 3 (Day 03, step-level failures): image attempts at ~4, 39, 93, 167, 309 s after send; the sixth succeeds at ~611 s and the default-retries run fails at ~324 s. Decision: Day 03 uses `failTimes: 5` (settle 720 s / 420 s) instead of 6 (~20+ min).
+- [x] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values (Phase 1, Dev Server 1.49.0, default `retries: 4`, retry gaps ~25–30 s, ~45 s, ~75–85 s, ~150 s with jitter): **2 failures → Completed after ~80–105 s; 4 failures → Completed after ~305 s; 6 failures → Failed (retries exhausted) after ~295 s.** Day 01's two-failure scenarios fit in a 120 s `settleMs`; Day 03's `very-flaky-image-before` (4 retries exhausted) needs ~5 min. Phase 3 (Day 03, step-level failures): image attempts at ~4, 39, 93, 167, 309 s after send; the sixth succeeds at ~611 s and the default-retries run fails at ~324 s. Decision: Day 03 uses `failTimes: 5` (settle 720 s / 420 s) instead of 6 (~20+ min). Superseded in Phase 3b by `retryInMs` (see Snappy scenarios).
 - [ ] **Run lookups.** If the Dev Server has no function-level runs query, decide whether ledger-only assertions are enough for invoked, fan-out and `onFailure` runs.
 - [ ] **Day 12 surface.** Confirm whether the Dev Server shows experiment variants and scores, or whether the Day 12 demo needs Inngest Cloud (and therefore a signing key in the demo flow).
 - [ ] **Plan gating.** Priority, batching (`maxSize: 50` versus plan batch limits) and Agent Evals need a check against the pricing and packaging decision before Days 10–12 publish.
 - [ ] **Contest template.** Days run locally on Express; contest entries need a live deploy link. Decide whether a separate Vercel-ready template is in scope.
 - [ ] **Finale.** `finale/` stays an empty scaffold until the livestream build is specced.
-- [ ] **Snappy scenarios (added Phase 3).** The "On camera" rule wants every README scenario visibly done in under 60 s. Built days that break it today (measured): Day 01 `flaky-image` and `flaky-image-before` ~80–105 s (two default-backoff retries); Day 03 `very-flaky-image` ~10 min and `very-flaky-image-before` ~5.5 min (five failures). The Dev Server's retry backoff (~35 s, 55 s, 75 s, 140 s, 300 s gaps) is the bottleneck and isn't configurable from the SDK, so fixing these means fewer failures, a chaos status that maps to `RetryAfterError`, or cutting the shot in editing. Day 06 (~60 s for 21 cards) is borderline.
+- [x] **Snappy scenarios (added Phase 3).** The "On camera" rule wants every README scenario visibly done in under 60 s. Built days that break it today (measured): Day 01 `flaky-image` and `flaky-image-before` ~80–105 s (two default-backoff retries); Day 03 `very-flaky-image` ~10 min and `very-flaky-image-before` ~5.5 min (five failures). The Dev Server's retry backoff (~35 s, 55 s, 75 s, 140 s, 300 s gaps) is the bottleneck and isn't configurable from the SDK, so fixing these means fewer failures, a chaos status that maps to `RetryAfterError`, or cutting the shot in editing. Day 06 (~60 s for 21 cards) is borderline. **Resolved (Phase 3b):** `ChaosSpec.retryInMs` makes chaos failures throw `RetryAfterError`, so the Dev Server retries after ~1 s. Lesson code and failure counts are unchanged. Measured: Day 01 `flaky-image`/`-before` 10 s; Day 03 `very-flaky-image` 20 s, `-before` 16 s. READMEs note that real backoff takes minutes. Day 06 `noisy-neighbor` measured 37 s in the full gate, so it no longer counts as borderline.
 
 **Always stop for**
 

@@ -14,7 +14,7 @@ export async function sendCard(input: {
   if (failure) {
     record({ at: Date.now(), provider: "mail", op: "sendCard", cardId, ok: false, meta: { to } });
     console.log(`[mail] sendCard ${cardId} to ${to} failed ${failure.status} (call #${call})`);
-    throw failure;
+    throw failure.error;
   }
 
   const deliveredAt = new Date().toISOString();

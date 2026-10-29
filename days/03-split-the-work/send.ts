@@ -10,7 +10,8 @@ const card: CardRequest = {
 };
 
 // Five failures outlast the default 4 retries, but not render-card-image's 10.
-const veryFlakyImage: Chaos = { image: { failTimes: 5 } };
+// retryInMs makes each retry come about 1 s later, so the demo never waits on backoff.
+const veryFlakyImage: Chaos = { image: { failTimes: 5, retryInMs: 1000 } };
 
 export const scenarios: Record<string, Scenario> = {
   happy: {
@@ -37,7 +38,7 @@ export const scenarios: Record<string, Scenario> = {
       return ids;
     },
     expect: {
-      settleMs: 1_200_000,
+      settleMs: 60_000,
       runs: [
         { fn: "create-card", status: "Completed" },
         { fn: "render-card-image", status: "Completed" },
@@ -55,7 +56,7 @@ export const scenarios: Record<string, Scenario> = {
       return ids;
     },
     expect: {
-      settleMs: 720_000,
+      settleMs: 60_000,
       runs: [{ fn: "create-card-before", status: "Failed" }],
       ledger: { "mail.sendCard": 0 },
     },
