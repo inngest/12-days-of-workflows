@@ -28,4 +28,7 @@ export const cleanupDrafts = inngest.createFunction(
 );
 // @lesson:end
 
+// @lesson:start Register the cleanup function
 export const functions = [scheduleDelivery, cleanupDrafts];
+// @lesson:stub export const functions = [scheduleDelivery];
+// @lesson:end

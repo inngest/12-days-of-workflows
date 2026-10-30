@@ -48,6 +48,16 @@ Full task spec: SPEC.md.
   surprised us, and the decisions we made. It feeds a blog post, so tell
   the story; don't dump file lists, versions or test output.
 
+## Notion tech spec
+- Video outlines and per-day graphics are built from the Notion page
+  "12 Days of Workflows - Tech Spec":
+  https://app.notion.com/p/inngest/12-Days-of-Workflows-Tech-Spec-409b64753bbd80939db3d5e950d670d8
+- Its table (hook, demo beat, takeaway, visual concept) must match what the
+  code demos: counts, timings, failure numbers, function and step names.
+- At the end of every phase, or whenever a change alters a day's demo, fetch
+  the page and fix factual drift (numbers, primitives). Framing changes to a
+  hook, takeaway or visual concept are the team's call: flag them, don't rewrite.
+
 ## On camera
 - Every day is a short video episode, so every scenario a README tells viewers
   to run must resolve snappily: visibly done in under 60 s, ideally under 20 s.

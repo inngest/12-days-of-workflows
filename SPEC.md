@@ -156,8 +156,8 @@ export type WriteCardInput = { prompt: string; cardId?: string; tone?: string; v
 export type CardText = { text: string; tokens: number; costUsd: number };
 export function writeCard(input: WriteCardInput): Promise<CardText>;
 
-// fakes/image.ts — 1–3 s seeded latency; global limit IMAGE_RATE
-// (default 5 calls per 10 s), above it throws ProviderError(429, msUntilFree)
+// fakes/image.ts — 1–3 s seeded latency; global token bucket IMAGE_RATE
+// (default 5/10s: burst of 5, then 1 call per 2 s), above it throws ProviderError(429, msUntilFree)
 export function renderImage(input: { text: string }): Promise<{ url: string }>;
 
 // fakes/mail.ts — console only
@@ -794,7 +794,8 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 
 **Phase 4: Days 07–11.** Gate: `pnpm check 07 08 09 10 11`
 
-- [ ] Same rules as Phase 3
+- [x] Same rules as Phase 3
+- [x] Starter fix: Days 03, 05 and 09 wrap `export const functions` in a lesson region with a stub, so the starter typechecks when a whole function is the lesson
 
 **Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters`
 
@@ -814,6 +815,8 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 - [ ] **Plan gating.** Priority, batching (`maxSize: 50` versus plan batch limits) and Agent Evals need a check against the pricing and packaging decision before Days 10–12 publish.
 - [ ] **Contest template.** Days run locally on Express; contest entries need a live deploy link. Decide whether a separate Vercel-ready template is in scope.
 - [ ] **Finale.** `finale/` stays an empty scaffold until the livestream build is specced.
+- [x] **Throttle vs. the image fake (added Phase 4).** Day 07 `burst` got four 429s: the Dev Server's throttle starts a small burst, then one run every 2 s, while the image fake counted any 10 s sliding window. **Resolved:** the fake is now a token bucket (5 tokens, one back every 2 s), which is how Inngest's throttle and many real providers count. Lesson code unchanged; `burst` passes in ~24 s with zero 429s.
+- [ ] **Day 07 `burst-before` timing.** The 429 wall shows within seconds, so the scenario asserts only that (settle 15 s). Its retries use real backoff and finish minutes later; the check cancels them. Confirm that's acceptable on camera, or have the fake's 429 carry `retryInMs`.
 - [x] **Snappy scenarios (added Phase 3).** The "On camera" rule wants every README scenario visibly done in under 60 s. Built days that break it today (measured): Day 01 `flaky-image` and `flaky-image-before` ~80–105 s (two default-backoff retries); Day 03 `very-flaky-image` ~10 min and `very-flaky-image-before` ~5.5 min (five failures). The Dev Server's retry backoff (~35 s, 55 s, 75 s, 140 s, 300 s gaps) is the bottleneck and isn't configurable from the SDK, so fixing these means fewer failures, a chaos status that maps to `RetryAfterError`, or cutting the shot in editing. Day 06 (~60 s for 21 cards) is borderline. **Resolved (Phase 3b):** `ChaosSpec.retryInMs` makes chaos failures throw `RetryAfterError`, so the Dev Server retries after ~1 s. Lesson code and failure counts are unchanged. Measured: Day 01 `flaky-image`/`-before` 10 s; Day 03 `very-flaky-image` 20 s, `-before` 16 s. READMEs note that real backoff takes minutes. Day 06 `noisy-neighbor` measured 37 s in the full gate, so it no longer counts as borderline.
 
 **Always stop for**

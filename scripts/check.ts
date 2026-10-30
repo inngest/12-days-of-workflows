@@ -123,7 +123,12 @@ const STATUS: Record<string, RunStatus> = {
 async function cancelUnfinished(from: string) {
   for (const run of await runsSince(from)) {
     if (STATUS[run.status] === "Running") {
-      await gql("mutation Cancel($id: ULID!) { cancelRun(runID: $id) { id } }", { id: run.id });
+      // A run can finish between listing and cancelling; that's fine.
+      await gql("mutation Cancel($id: ULID!) { cancelRun(runID: $id) { id } }", {
+        id: run.id,
+      }).catch((err: Error) => {
+        if (!err.message.includes("ended run")) throw err;
+      });
     }
   }
 }

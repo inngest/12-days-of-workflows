@@ -25,4 +25,7 @@ export const createCard = inngest.createFunction(
   },
 );
 
+// @lesson:start Register the rendering function
 export const functions = [createCard, renderCardImage];
+// @lesson:stub export const functions = [createCard];
+// @lesson:end
