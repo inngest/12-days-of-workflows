@@ -832,11 +832,18 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 - [x] `wall.html`, `GET /`, `GET /__wall`, `POST /__event` and the `wall` option per "Ledger wall" above
 - [x] Actions for Days 04 and 08 (Day 12's land with Phase 5); one "Watch it" line per README
 
-**Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters`
+**Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters` (passed: 55/55 checks, starter typechecks)
 
 - [x] Day 12 on `inngest@^4.8.0` with `scoreMiddleware` (`pnpm check 12` passes in ~6 s; see "Day 12 surface")
-- [ ] Re-read every README against the template; every “Break it” command must match a scenario name
-- [ ] Print a table of lesson-line counts versus budgets for human review
+- [x] Re-read every README against the template; every “Break it” command must match a scenario name (all 12 pass: title, six headings, two-sentence problem with no feature names, every `pnpm send` names a real scenario)
+- [x] Print a table of lesson-line counts versus budgets for human review
+
+  | Day | Lines / budget | Day | Lines / budget | Day | Lines / budget |
+  | --- | --- | --- | --- | --- | --- |
+  | 01 | 3 / 15 | 05 | 10 / 25 | 09 | 10 / 20 |
+  | 02 | 9 / 25 | 06 | 1 / 5 | 10 | 1 / 5 |
+  | 03 | 9 / 15 | 07 | 1 / 5 | 11 | 8 / 10 |
+  | 04 | 9 / 15 | 08 | 1 / 5 | 12 | 32 / 35 |
 
 ## Stop and ask
 
