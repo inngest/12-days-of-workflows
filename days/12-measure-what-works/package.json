@@ -1,0 +1,11 @@
+{
+  "name": "@12days/day-12",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@12days/shared": "workspace:*",
+    "express": "^5.3.0",
+    "inngest": "^4.8.0",
+    "zod": "^4.6.7"
+  }
+}

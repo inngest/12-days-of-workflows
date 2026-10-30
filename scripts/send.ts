@@ -1,10 +1,13 @@
-import { loadDay, resolveDay, sleep } from "./lib.js";
+import { loadDay, requireEnv, resolveDay, sleep } from "./lib.js";
 
-process.env.INNGEST_DEV = "1";
+// --cloud sends to Inngest Cloud (needs INNGEST_EVENT_KEY) instead of the local Dev Server.
+const cloud = process.argv.includes("--cloud");
+if (cloud) requireEnv(["INNGEST_EVENT_KEY"]);
+else process.env.INNGEST_DEV = "1";
 
-const [dayArg, name = "happy"] = process.argv.slice(2);
+const [dayArg, name = "happy"] = process.argv.slice(2).filter((a) => a !== "--cloud");
 if (!dayArg) {
-  console.error("Usage: pnpm send NN [scenario | --list]");
+  console.error("Usage: pnpm send NN [scenario | --list] [--cloud]");
   process.exit(1);
 }
 const { inngest, mod } = await loadDay(resolveDay(dayArg));

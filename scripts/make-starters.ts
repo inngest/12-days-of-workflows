@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LESSON_FILES, listDays, ROOT, toStarter } from "./lib.js";
+import { LESSON_FILES, listDays, NO_EMIT_PROJECTS, ROOT, toStarter } from "./lib.js";
 
 // Usage: pnpm starters [--push]
 // Rebuilds the `starter` branch from HEAD without touching the main working tree.
@@ -48,6 +48,10 @@ try {
   run("pnpm install", "pnpm", ["install", "--frozen-lockfile", "--prefer-offline"], worktree);
   try {
     run("tsc -b", join(worktree, "node_modules/.bin/tsc"), ["-b"], worktree);
+    for (const project of NO_EMIT_PROJECTS) {
+      const tsc = join(worktree, "node_modules/.bin/tsc");
+      run(`tsc ${project}`, tsc, ["--noEmit", "-p", project], worktree);
+    }
   } catch (err) {
     console.error("Starter does not typecheck. Missing a @lesson:stub?");
     throw err;

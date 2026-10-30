@@ -10,6 +10,7 @@ import {
   LESSON_FILES,
   listDays,
   loadDay,
+  NO_EMIT_PROJECTS,
   ROOT,
   resolveDay,
   sleep,
@@ -357,6 +358,9 @@ const selected = process.argv.slice(2);
 const days = (selected.length ? selected : listDays().map((d) => d.slice(0, 2))).map(resolveDay);
 
 runStep("tsc -b", join(ROOT, "node_modules/.bin/tsc"), ["-b"]);
+for (const project of NO_EMIT_PROJECTS) {
+  runStep(`tsc ${project}`, join(ROOT, "node_modules/.bin/tsc"), ["--noEmit", "-p", project]);
+}
 runStep("biome check", join(ROOT, "node_modules/.bin/biome"), ["check", "."]);
 
 const inUse = await fetch(DEV_SERVER).then(

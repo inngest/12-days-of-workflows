@@ -78,3 +78,14 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - One catch from testing: our browser automation typed whole words as a single input event, so the first debounce demo looked broken. Sending one event per character, the way a person types, fixed it.
 - The page sends events through the day's own client, and only accepts event names that day lists. A stray request can't fire `card/deleted` at Day 05 by accident.
 - The colors are named variables at the top of the file, including the four level colors from the Notion tech spec. The designer can brand it without touching code.
+
+## Phase 5: Day 12
+
+- The last day answers "we changed the prompt; is it better?" with three new beta APIs: an experiment that splits traffic between two prompt tones, a score recorded during the run, and a deferred scorer that waits for the recipient's reaction and credits it to the right variant. It fits in 32 of its 35 lesson lines.
+- The scorer is the nicest idea of the series: it's an ordinary durable function that can sit on `waitForEvent` for a week, so "did they love it?" becomes a score without a feedback table or a cron job.
+- The SDK fought the build before the lesson did. TypeScript refused to build the Day 12 client because the scoring middleware's type references an internal SDK type that isn't exported, and our composite build writes declaration files. Day 12 now typechecks on its own with `--noEmit`, and it's logged to report upstream.
+- The scenario has to be patient in the right place. A reaction only counts if its scorer is already waiting, so the script waits for all 40 deliveries before any recipient "reacts". Same lesson as Day 04's approval race.
+- Then the check said all 40 card runs were still Running. They weren't: we compared one card before and after a reaction and watched the Dev Server flip the finished parent run back to Running the moment its deferred score landed. That's a beta quirk, so the check now verifies those runs through the ledger.
+- That answered an open question from the start of the project: the local Dev Server doesn't display experiments or scores yet, and says so on its own pages. The "one variant pulls ahead" shot needs Inngest Cloud, or a scoreboard on our ledger wall. The README says so plainly instead of promising a view that isn't there.
+- Since the payoff lives in Inngest Cloud, Day 12 is recorded against Cloud. The catch is that Cloud normally calls your app over HTTP, and a laptop on a film set has no public URL. Inngest Connect flips the direction: the app dials out over a WebSocket and Cloud sends it work. `pnpm day 12 --cloud` does exactly that, while the ledger wall stays on localhost.
+- We couldn't test against Cloud without the shoot's keys, but Connect also talks to the local Dev Server. Running the full 40-card experiment through that path proved the wiring before anyone needs a signing key.

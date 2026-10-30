@@ -8,6 +8,13 @@ import type { Inngest } from "inngest";
 export const ROOT = join(import.meta.dirname, "..");
 export const DEV_SERVER = "http://localhost:8288";
 
+/**
+ * Projects outside the `tsc -b` graph, typechecked with `tsc --noEmit -p`. Day 12's scoring types
+ * reference an SDK type that isn't exported, so a composite (declaration-emitting) build can't
+ * name them.
+ */
+export const NO_EMIT_PROJECTS = ["days/12-measure-what-works"];
+
 export type Day = { nn: string; dir: string; port: number };
 
 export function listDays(): string[] {
@@ -59,12 +66,14 @@ type OutputOpts = { onLine?: (line: string) => void };
 
 export function startApp(
   day: Day,
-  opts: OutputOpts & { watch?: boolean; env?: Record<string, string> } = {},
+  opts: OutputOpts & { watch?: boolean; cloud?: boolean; env?: Record<string, string> } = {},
 ) {
   const args = opts.watch ? ["watch", "src/index.ts"] : ["src/index.ts"];
+  // Cloud mode leaves INNGEST_DEV unset, so the SDK uses INNGEST_SIGNING_KEY from the env.
+  const mode: Record<string, string> = opts.cloud ? { USE_CONNECT: "1" } : { INNGEST_DEV: "1" };
   return spawnPrefixed("app", join(ROOT, "node_modules/.bin/tsx"), args, {
     cwd: day.dir,
-    env: { ...opts.env, PORT: String(day.port), INNGEST_DEV: "1" },
+    env: { ...opts.env, PORT: String(day.port), ...mode },
     onLine: opts.onLine,
   });
 }
@@ -91,6 +100,14 @@ export function stop(child: ChildProcess): Promise<void> {
       resolve();
     }
   });
+}
+
+/** Exits with a hint unless every named env var is set. Cloud mode needs real Inngest keys. */
+export function requireEnv(names: string[]) {
+  const missing = names.filter((name) => !process.env[name]);
+  if (missing.length === 0) return;
+  console.error(`--cloud needs ${missing.join(" and ")} set (from your Inngest environment).`);
+  process.exit(1);
 }
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

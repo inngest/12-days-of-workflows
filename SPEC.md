@@ -139,6 +139,8 @@ pnpm 9 workspace, Node 22, ESM, strict TypeScript. Root scripts are thin `tsx` w
 4. Prefix each process's output (`[app]`, `[dev]`) and kill both on SIGINT.
 5. `pnpm day all` starts all 12 apps and one Dev Server with twelve `-u` flags, for the finale.
 
+**Cloud mode.** `pnpm day NN --cloud` starts only the app, with `USE_CONNECT=1` and no `INNGEST_DEV`; `startServer` then calls `connect()` from `inngest/connect` instead of mounting `serve()`, so Inngest Cloud reaches a laptop over an outbound WebSocket. The ledger and wall routes stay local. `pnpm send NN [scenario] --cloud` sends with the event key instead of to the Dev Server. Both exit with a hint unless `INNGEST_SIGNING_KEY` (day) and `INNGEST_EVENT_KEY` are set. `pnpm check` always uses the Dev Server.
+
 **`scripts/send.ts` behavior:** imports `days/NN-*/send.ts`, runs the named scenario (default `happy`) with `INNGEST_DEV=1`, and prints the sent event ids. Unknown scenario names exit 1 and list the valid ones.
 
 ## packages/shared contract
@@ -832,7 +834,7 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 
 **Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters`
 
-- [ ] Day 12 on `inngest@^4.8.0` with `scoreMiddleware`
+- [x] Day 12 on `inngest@^4.8.0` with `scoreMiddleware` (`pnpm check 12` passes in ~6 s; see "Day 12 surface")
 - [ ] Re-read every README against the template; every “Break it” command must match a scenario name
 - [ ] Print a table of lesson-line counts versus budgets for human review
 
@@ -844,7 +846,7 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 
 - [x] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values (Phase 1, Dev Server 1.49.0, default `retries: 4`, retry gaps ~25–30 s, ~45 s, ~75–85 s, ~150 s with jitter): **2 failures → Completed after ~80–105 s; 4 failures → Completed after ~305 s; 6 failures → Failed (retries exhausted) after ~295 s.** Day 01's two-failure scenarios fit in a 120 s `settleMs`; Day 03's `very-flaky-image-before` (4 retries exhausted) needs ~5 min. Phase 3 (Day 03, step-level failures): image attempts at ~4, 39, 93, 167, 309 s after send; the sixth succeeds at ~611 s and the default-retries run fails at ~324 s. Decision: Day 03 uses `failTimes: 5` (settle 720 s / 420 s) instead of 6 (~20+ min). Superseded in Phase 3b by `retryInMs` (see Snappy scenarios).
 - [ ] **Run lookups.** If the Dev Server has no function-level runs query, decide whether ledger-only assertions are enough for invoked, fan-out and `onFailure` runs.
-- [ ] **Day 12 surface.** Confirm whether the Dev Server shows experiment variants and scores, or whether the Day 12 demo needs Inngest Cloud (and therefore a signing key in the demo flow).
+- [x] **Day 12 surface.** Answered in Phase 5 (Dev Server 1.49): its Experiments and Scores pages say "The Dev Server doesn't display experiments/scores yet" and point to Inngest Cloud, so the comparison needs Cloud and a signing key in the demo flow. Two beta quirks to report upstream: once a deferred score lands, the Dev Server reports the parent run as Running and its run view is empty (the run did finish); and the TS SDK's `ScoreStepTool` type isn't exported, so a declaration-emitting (composite) project can't build a client with `scoreMiddleware()` (TS2883). Day 12 typechecks with `--noEmit` outside `tsc -b` (`NO_EMIT_PROJECTS` in `scripts/lib.ts`), and its scenario checks `create-card` through the ledger. **Decided: record Day 12 against Cloud** via `--cloud` (Inngest Connect, verified end to end against the Dev Server's Connect gateway; not yet against Cloud itself, which needs the shoot's keys).
 - [ ] **Plan gating.** Priority, batching (`maxSize: 50` versus plan batch limits) and Agent Evals need a check against the pricing and packaging decision before Days 10–12 publish.
 - [ ] **Contest template.** Days run locally on Express; contest entries need a live deploy link. Decide whether a separate Vercel-ready template is in scope.
 - [ ] **Ledger wall redesign (after Phase 5).** The first version reads as generic service panels. Revisit once all 12 days exist, choosing between three mocked directions: (A) before and after columns that both stay on screen, with Break it / Fix it buttons that run the scenarios; (B) one hero number per day as a plain-language outcome, with the "before" as a struck-out ghost; (C) a timeline of calls per run for timing-driven days (07, 08, 10). Each day will need a small wall config naming its hero metric.

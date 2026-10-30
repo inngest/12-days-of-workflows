@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import express from "express";
 import type { Inngest, InngestFunction } from "inngest";
+import { connect } from "inngest/connect";
 import { serve } from "inngest/express";
 import { entries, reset } from "./ledger.js";
 
@@ -29,7 +30,16 @@ export function startServer(opts: {
   const actions = opts.wall?.actions ?? [];
   const app = express();
   app.use(express.json({ limit: "1mb" }));
-  app.use("/api/inngest", serve({ client: opts.client, functions: opts.functions }));
+  // `pnpm day NN --cloud` sets USE_CONNECT=1: the app dials out to Inngest Cloud over a
+  // WebSocket, so Cloud can run its functions without a public URL.
+  const useConnect = process.env.USE_CONNECT === "1";
+  if (useConnect) {
+    void connect({ apps: [{ client: opts.client, functions: opts.functions }] }).then(() => {
+      console.log(`${opts.client.id} connected to Inngest`);
+    });
+  } else {
+    app.use("/api/inngest", serve({ client: opts.client, functions: opts.functions }));
+  }
 
   // Test-only routes used by `pnpm check`.
   app.get("/__ledger", (_req, res) => {
@@ -58,7 +68,9 @@ export function startServer(opts: {
   });
 
   app.listen(port, () => {
-    console.log(`${opts.client.id} listening on http://localhost:${port}/api/inngest`);
+    if (!useConnect) {
+      console.log(`${opts.client.id} listening on http://localhost:${port}/api/inngest`);
+    }
     console.log(`${opts.client.id} ledger wall on http://localhost:${port}`);
   });
 }

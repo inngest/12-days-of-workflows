@@ -7,6 +7,8 @@ Full task spec: SPEC.md.
 ## Commands
 - `pnpm install`
 - `pnpm day NN` — runs day NN on port 30NN plus the Dev Server on :8288
+- `pnpm day NN --cloud` / `pnpm send NN [scenario] --cloud` — same against Inngest Cloud over
+  `connect()`; needs `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY` (Day 12 recording)
 - `pnpm send NN [scenario]` — fires a scenario's events
 - `pnpm check [NN]` — typecheck + scenario assertions (all days if NN omitted)
 - `pnpm starters` — regenerates the `starter` branch
