@@ -12,8 +12,10 @@ IMAGE_RATE=off pnpm day 06
 pnpm send 06 noisy-neighbor-before
 ```
 
+`IMAGE_RATE=off` turns off the image service's rate limit, which gets its own day (07).
+
 Account `a` sends 20 cards, then account `b` sends one. With a single lane of 5, `b1` is one of
-the last cards delivered. Watch the `[mail]` lines: twenty `a…` deliveries, then `b1`.
+the last cards delivered. Watch the `[mail]` lines: `b1` lands behind nearly all of `a`'s cards.
 
 ## Fix it
 

@@ -12,7 +12,7 @@ pnpm day 11
 pnpm send 11 opens-120-before
 ```
 
-120 opens arrive over two seconds. Watch the `[warehouse]` lines: 120 inserts of `1 rows`, each
+120 opens arrive over two seconds. Watch the `[warehouse]` lines: 120 inserts of `1 row`, each
 `billed 1 write`.
 
 ## Fix it
@@ -27,8 +27,10 @@ export const recordOpens = inngest.createFunction(
     triggers: [cardOpened],
     batchEvents: { maxSize: 50, timeout: "5s" },
   },
-  async ({ events, step }) =>
-    step.run("insert-opens", () => insertRows("card_opens", events.map((e) => e.data))),
+  async ({ events, step }) => {
+    const opens = events.map((event) => event.data);
+    return step.run("insert-opens", () => insertRows("card_opens", opens));
+  },
 );
 ```
 

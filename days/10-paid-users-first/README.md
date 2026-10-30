@@ -12,6 +12,8 @@ IMAGE_RATE=off pnpm day 10
 pnpm send 10 pro-arrives-late-before
 ```
 
+`IMAGE_RATE=off` turns off the image service's rate limit (Day 07), so only the queue matters.
+
 Twenty free cards fill the queue (`concurrency: { limit: 2 }` keeps it from draining instantly).
 Two pro cards arrive two seconds later. Watch the `[mail]` lines: `p1` and `p2` are delivered
 last.

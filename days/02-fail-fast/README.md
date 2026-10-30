@@ -14,40 +14,49 @@ pnpm send 02 grinch-before
 ```
 
 The prompt mentions the Grinch, so moderation rejects it with a plain `Error`. Inngest can't tell
-that apart from a network blip, so the `[app]` log shows `[moderation] checkPrompt c1 rejected`
-again and again as the run retries for minutes. Nobody tells the sender anything.
+that apart from a network blip, so the run fails, waits, and tries again, and it will keep doing
+that for minutes. The Dev Server shows it stuck in Running. Nobody tells the sender anything.
 
 ## Fix it
 
-Three tools, one per kind of failure:
+Tell Inngest the failure is permanent, and tell the sender once it's over:
 
 ```ts
 // Permanent: stop now, no retries.
 if (!verdict.ok) throw new NonRetriableError(`Rejected: ${verdict.reason}`);
 
-// Temporary, with a deadline: retry exactly when the provider says.
-if (err instanceof ProviderError && err.status === 429) {
-  throw new RetryAfterError("LLM rate limited", err.retryAfterMs ?? "1m", { cause: err });
-}
-
 // Failed for good (any reason): run a handler once, after the last attempt.
 onFailure: async ({ event, error, step }) => {
-  await step.run("notify-sender", () =>
-    notifySender(event.data.event.data.cardId, error.message),
-  );
+  const card = event.data.event.data;
+  await step.run("notify-sender", () => notifySender(card.cardId, error.message));
 },
 ```
 
-`onFailure` receives a failure event, so the original trigger lives at `event.data.event`.
+`onFailure` receives a failure event, so the original card lives at `event.data.event.data`.
 
 ```sh
 pnpm send 02 grinch
+```
+
+`grinch` fails in seconds, and `[mail] notifySender c1 "Rejected: …"` appears once.
+
+### One more: come back when the provider says
+
+Some failures come with a deadline. When the AI provider answers 429 with "try again in 5
+seconds", retry exactly then:
+
+```ts
+if (err instanceof ProviderError && err.status === 429) {
+  throw new RetryAfterError("LLM rate limited", err.retryAfterMs ?? "1m", { cause: err });
+}
+```
+
+```sh
 pnpm send 02 llm-429
 ```
 
-`grinch` fails in seconds and `[mail] notifySender c1 "Rejected: …"` appears once. `llm-429`
-fails the LLM once with a 429, waits the 5 seconds the provider asked for, and bills on the second
-call. Without `RetryAfterError`, the retry would wait for the default backoff (15 s or more).
+The LLM fails once, waits the 5 seconds it was told to, and bills on the second call. Without
+`RetryAfterError`, the retry would wait for the default backoff (15 s or more).
 
 ## Watch it
 

@@ -19,7 +19,7 @@ export const createCard = inngest.createFunction(
       return { status: "expired" };
     }
     // @lesson:end
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
     return { status: "delivered" };
   },
 );

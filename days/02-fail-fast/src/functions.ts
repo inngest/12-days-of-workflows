@@ -16,9 +16,8 @@ export const createCard = inngest.createFunction(
     triggers: [cardRequested],
     // @lesson:start Tell the sender when a card fails for good
     onFailure: async ({ event, error, step }) => {
-      await step.run("notify-sender", () =>
-        notifySender(event.data.event.data.cardId, error.message),
-      );
+      const card = event.data.event.data;
+      await step.run("notify-sender", () => notifySender(card.cardId, error.message));
     },
     // @lesson:end
   },
@@ -42,7 +41,7 @@ export const createCard = inngest.createFunction(
       }
     });
     const image = await step.run("render-image", () => renderImage({ text: card.text }));
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
     return { text: card.text, image: image.url };
   },
 );

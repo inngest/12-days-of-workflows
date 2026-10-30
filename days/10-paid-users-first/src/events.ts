@@ -4,7 +4,6 @@ export type CardRequest = {
   cardId: string;
   prompt: string;
   to: string;
-  accountId: string;
   plan: "free" | "pro";
 };
 

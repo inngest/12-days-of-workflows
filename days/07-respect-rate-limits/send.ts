@@ -4,9 +4,17 @@ import type { CardRequest } from "./src/events.js";
 
 export const lessonBudget = 5;
 
+const names = "Alex Bea Cal Dee Eli Fay Gus Hal Ivy Jo Kit Lou Max Nia Oz Pip Quin Rae Sol Tess";
+
+/** "Happy holidays, Alex!" Distinct text per card, so the fakes don't time every card the same. */
+const greeting = (cardId: string) => {
+  const list = names.split(" ");
+  return `Happy holidays, ${list[Number(cardId.slice(1)) % list.length]}!`;
+};
+
 const card = (cardId: string): CardRequest => ({
   cardId,
-  prompt: `Holiday card ${cardId}`,
+  prompt: greeting(cardId),
   to: `${cardId}@example.com`,
 });
 
@@ -22,7 +30,7 @@ const rateLimited = (ledger: LedgerEntry[]) =>
 
 export const scenarios: Record<string, Scenario> = {
   burst: {
-    description: "15 cards at once; renders are throttled to the provider's 5 per 10 s",
+    description: "15 cards at once; renders are throttled to 4 per 10 s, under the provider's 5",
     send: ({ inngest }) => sendBurst(inngest, "card/requested"),
     expect: {
       settleMs: 60_000,

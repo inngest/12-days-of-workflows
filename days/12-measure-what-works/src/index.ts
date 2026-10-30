@@ -2,7 +2,11 @@ import { startServer } from "@12days/shared";
 import { inngest } from "./client.js";
 import { functions } from "./functions.js";
 
-const c1 = { cardId: "c1", prompt: "Happy holidays to the whole team", to: "jason@example.com" };
+const c1 = {
+  cardId: "c1",
+  prompt: "Merry Christmas, Grandma. Thanks for the cookies!",
+  to: "grandma@example.com",
+};
 
 startServer({
   client: inngest,

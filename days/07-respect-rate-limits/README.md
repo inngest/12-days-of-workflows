@@ -12,22 +12,26 @@ pnpm day 07
 pnpm send 07 burst-before
 ```
 
-Fifteen cards arrive at once. Watch the `[image]` lines: a handful render, then a run of
-`rate limited, free in … ms`. Those renders retry on the normal backoff, so the stragglers trickle
-in over the next few minutes, and some of them hit the limit again.
+Fifteen cards arrive at once. Watch the `[image]` lines: about five render, and the rest
+get `rate limited, free in … ms`. Every one of those is a wasted call, and each will retry later on
+the normal backoff, only to compete with whatever else is rendering.
+
+Before the fix, stop `pnpm day 07` and start it again. The leftover retries would otherwise land
+in the middle of the next scenario.
 
 ## Fix it
 
 Throttle the function that calls the provider. Day 03 already gave rendering its own function, so
-one run start means one image call, and the throttle maps straight onto the provider's limit.
+one run start means one image call. Set the throttle a little under the provider's limit: run
+starts and the provider's own clock never line up exactly, and the headroom absorbs the difference.
 
 ```ts
 export const renderCardImage = inngest.createFunction(
   {
     id: "render-card-image",
     retries: 10,
-    triggers: [imageRequested],
-    throttle: { limit: 5, period: "10s" },
+    triggers: [invokedWithText],
+    throttle: { limit: 4, period: "10s" },
   },
   async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),
 );

@@ -18,10 +18,11 @@ Three pieces. First, an experiment splits traffic between the two prompts and re
 each run got:
 
 ```ts
-const { result: card, variant, experimentRef } = await group.experiment("card-tone", {
+const { prompt } = event.data;
+const { result, variant, experimentRef } = await group.experiment("card-tone", {
   variants: {
-    classic: () => step.run("write-classic", () => writeCard({ ...event.data, variant: "classic" })),
-    warm: () => step.run("write-warm", () => writeCard({ ...event.data, variant: "warm" })),
+    classic: () => step.run("write-classic", () => writeCard({ prompt, variant: "classic" })),
+    warm: () => step.run("write-warm", () => writeCard({ prompt, variant: "warm" })),
   },
   select: experiment.weighted({ classic: 50, warm: 50 }),
 });
@@ -31,7 +32,7 @@ Second, score what you know right away, and hand what you'll learn later to a de
 tagged with the variant:
 
 ```ts
-await step.score("score-length", { name: "fits-on-card", value: card.text.length <= 280 });
+await step.score("score-length", { name: "fits-on-card", value: result.text.length <= 280 });
 defer("score-reaction", {
   function: reactionScorer,
   data: { cardId: event.data.cardId },
@@ -45,17 +46,20 @@ Third, the scorer is a durable function that waits days for the recipient's reac
 export const reactionScorer = createScorer(
   inngest,
   { id: "score-recipient-reaction", schema: z.object({ cardId: z.string() }) },
-  async ({ event, step }) => {
+  async ({ step }) => {
     const reaction = await step.waitForEvent("wait-for-reaction", {
       event: cardReacted,
       timeout: process.env.REACTION_TTL ?? "7d",
-      if: `async.data.cardId == '${event.data.cardId}'`,
+      match: "data.cardId",
     });
-    if (!reaction) return null;
+    if (reaction === null) return null;
     return { name: "recipient-loved-it", value: reaction.data.loved };
   },
 );
 ```
+
+`match: "data.cardId"` pairs each reaction with the card this scorer was deferred for, just like
+the approval on Day 04.
 
 `step.score()` needs `scoreMiddleware()` from `inngest/experimental` on the client (see
 `client.ts`). Scoring and experiments are beta APIs.

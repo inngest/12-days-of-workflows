@@ -23,7 +23,7 @@ parent waits for the child's result as if it were a step.
 
 ```ts
 export const renderCardImage = inngest.createFunction(
-  { id: "render-card-image", retries: 10, triggers: [imageRequested] },
+  { id: "render-card-image", retries: 10, triggers: [invokedWithText] },
   async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),
 );
 
@@ -33,7 +33,7 @@ const image = await step.invoke("render-image", {
 });
 ```
 
-`imageRequested` is `invoke(staticSchema<{ text: string }>())` in `events.ts`. It marks the
+`invokedWithText` is `invoke(staticSchema<{ text: string }>())` in `events.ts`. It marks the
 function as invoke-only and types `event.data` for both sides of the call.
 
 ```sh

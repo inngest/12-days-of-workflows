@@ -35,7 +35,7 @@ export const scenarios: Record<string, Scenario> = {
     expect: {
       settleMs: 30_000,
       runs: [
-        { fn: "bulk-send", status: "Completed" },
+        { fn: "send-to-everyone", status: "Completed" },
         { fn: "deliver-card", status: "Completed", count: 50 },
       ],
       ledger: { "mail.sendCard": 51 },
@@ -52,7 +52,7 @@ export const scenarios: Record<string, Scenario> = {
     send: ({ inngest }) => sendBulk(inngest, "card/bulk-send.before"),
     expect: {
       settleMs: 30_000,
-      runs: [{ fn: "bulk-send-before", status: "Completed" }],
+      runs: [{ fn: "send-to-everyone-before", status: "Completed" }],
       custom: (ledger) => {
         const twice = [...deliveriesPerRecipient(ledger).values()].filter((n) => n > 1).length;
         return twice >= 20 ? null : `${twice} recipients got the card twice, expected 20+`;

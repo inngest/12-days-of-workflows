@@ -6,6 +6,6 @@ export const cardBulkSend = eventType("card/bulk-send", {
   schema: staticSchema<BulkSend>(),
 });
 
-export const cardDeliver = eventType("card/deliver", {
+export const deliveryRequested = eventType("card/delivery.requested", {
   schema: staticSchema<{ cardId: string; to: string }>(),
 });

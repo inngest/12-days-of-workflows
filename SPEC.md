@@ -548,7 +548,7 @@ Problem: one account sends a burst of cards and everyone else's single card wait
 | `noisy-neighbor` | `IMAGE_RATE=off` | 20 cards from account `a`, then `b1` from account `b` 2 s later | all Completed within 60 s; custom: `b1` among the first 6 deliveries |
 | `noisy-neighbor-before` | `IMAGE_RATE=off` | same, to `.before` (no key) | custom: `b1` delivered 13th or later (measured: 19th of 21) |
 
-`CardRequest` gains `accountId: string` from this day on. `IMAGE_RATE=off` keeps the image fake's rate limit out of the way until Day 7.
+`CardRequest` gains `accountId: string` for this day. `IMAGE_RATE=off` keeps the image fake's rate limit out of the way until Day 7.
 
 ```ts
 export const createCard = inngest.createFunction(
@@ -586,8 +586,8 @@ export const renderCardImage = inngest.createFunction(
   {
     id: "render-card-image",
     retries: 10,
-    // @lesson:start Start at most 5 renders per 10 seconds
-    throttle: { limit: 5, period: "10s" },
+    // @lesson:start Start at most 4 renders per 10 seconds, just under the provider's 5
+    throttle: { limit: 4, period: "10s" }, // 5 flaked ~1 run in 3: the Dev Server sometimes starts 6 at once
     // @lesson:end
   },
   async ({ event, step }) =>
@@ -629,23 +629,23 @@ Problem: sending one card to 50 recipients in a single loop means one failure re
 
 | Scenario | Sends | Expect |
 | --- | --- | --- |
-| `bulk-50` | one `card/bulk-send` with 50 recipients; `chaos.mail: { afterCalls: 24, failTimes: 1 }` | `bulk-send` Completed; `deliver-card` Completed, count 50; `mail.sendCard` 51 calls, 0 duplicate recipients |
+| `bulk-50` | one `card/bulk-send` with 50 recipients; `chaos.mail: { afterCalls: 24, failTimes: 1 }` | `send-to-everyone` Completed; `deliver-card` Completed, count 50; `mail.sendCard` 51 calls, 0 duplicate recipients |
 | `bulk-50-before` | same, to `.before` (loop inside one step) | custom: ≥ 20 recipients delivered twice |
 
 `before.ts` is the loop-vs-step anti-pattern from the customer call: one `step.run` wrapping the whole `for` loop. The README should name it as such.
 
 ```ts
-export const cardDeliver = eventType("card/deliver", {
+export const deliveryRequested = eventType("card/delivery.requested", {
   schema: staticSchema<{ cardId: string; to: string }>(),
 });
 
-export const bulkSend = inngest.createFunction(
-  { id: "bulk-send", triggers: [cardBulkSend] },
+export const sendToEveryone = inngest.createFunction(
+  { id: "send-to-everyone", triggers: [cardBulkSend] },
   async ({ event, step }) => {
     // @lesson:start Fan out: one event per recipient
     await step.sendEvent(
       "fan-out",
-      event.data.recipients.map((to) => cardDeliver.create({ cardId: event.data.cardId, to }))
+      event.data.recipients.map((to) => deliveryRequested.create({ cardId: event.data.cardId, to }))
     );
     // @lesson:end
     return { queued: event.data.recipients.length };
@@ -654,7 +654,7 @@ export const bulkSend = inngest.createFunction(
 
 // @lesson:start Each delivery is its own run with its own retries
 export const deliverCard = inngest.createFunction(
-  { id: "deliver-card", triggers: [cardDeliver] },
+  { id: "deliver-card", triggers: [deliveryRequested] },
   async ({ event, step }) =>
     step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }))
 );
@@ -844,6 +844,8 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
   | 02 | 9 / 25 | 06 | 1 / 5 | 10 | 1 / 5 |
   | 03 | 9 / 15 | 07 | 1 / 5 | 11 | 8 / 10 |
   | 04 | 9 / 15 | 08 | 1 / 5 | 12 | 32 / 35 |
+
+**Readability sweep (after Phase 5).** Reference code above is the original target shape. The days have since been simplified for the screen: `sendCard(event.data)`, Day 04 has a `before.ts` and an `approve-before` scenario with a 15 s TTL, Day 05's event is `card/scheduled`, Day 07 throttles at 4 per 10 s, Day 09 uses `card/delivery.requested` and `send-to-everyone`, Days 03/07 call the invoke trigger `invokedWithText`, and Day 12's scorer uses `match`. The code and READMEs are the source of truth; BUILD_LOG has the reasons.
 
 ## Stop and ask
 

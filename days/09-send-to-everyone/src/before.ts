@@ -9,8 +9,8 @@ const cardBulkSendBefore = eventType("card/bulk-send.before", {
 
 // The loop-inside-a-step anti-pattern: one failure retries the whole step, so everyone
 // delivered before it gets the card again.
-export const bulkSendBefore = inngest.createFunction(
-  { id: "bulk-send-before", triggers: [cardBulkSendBefore] },
+export const sendToEveryoneBefore = inngest.createFunction(
+  { id: "send-to-everyone-before", triggers: [cardBulkSendBefore] },
   async ({ event, step }) => {
     await step.run("deliver-all", async () => {
       for (const to of event.data.recipients) {
@@ -21,4 +21,4 @@ export const bulkSendBefore = inngest.createFunction(
   },
 );
 
-export const beforeFunctions = [bulkSendBefore];
+export const beforeFunctions = [sendToEveryoneBefore];

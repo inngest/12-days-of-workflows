@@ -1,18 +1,18 @@
 import { sendCard } from "@12days/shared";
 import { eventType, staticSchema } from "inngest";
 import { inngest } from "./client.js";
-import type { ApprovedCard } from "./events.js";
+import type { ScheduledCard } from "./events.js";
 
-const cardApprovedBefore = eventType("card/approved.before", {
-  schema: staticSchema<ApprovedCard>(),
+const cardScheduledBefore = eventType("card/scheduled.before", {
+  schema: staticSchema<ScheduledCard>(),
 });
 
 // No cancelOn: deleting the card does nothing, and the sleeping run delivers it anyway.
 export const scheduleDeliveryBefore = inngest.createFunction(
-  { id: "schedule-delivery-before", triggers: [cardApprovedBefore] },
+  { id: "schedule-delivery-before", triggers: [cardScheduledBefore] },
   async ({ event, step }) => {
     await step.sleepUntil("wait-for-delivery-date", event.data.deliverAt);
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
   },
 );
 

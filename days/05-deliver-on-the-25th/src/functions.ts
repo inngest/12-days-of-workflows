@@ -1,11 +1,11 @@
 import { drafts, sendCard } from "@12days/shared";
 import { inngest } from "./client.js";
-import { cardApproved, cardDeleted, cleanupRequested } from "./events.js";
+import { cardDeleted, cardScheduled, cleanupRequested } from "./events.js";
 
 export const scheduleDelivery = inngest.createFunction(
   {
     id: "schedule-delivery",
-    triggers: [cardApproved],
+    triggers: [cardScheduled],
     // @lesson:start Cancel the sleeping run when the card is deleted
     cancelOn: [{ event: cardDeleted, match: "data.cardId" }],
     // @lesson:end
@@ -14,7 +14,7 @@ export const scheduleDelivery = inngest.createFunction(
     // @lesson:start Sleep until the delivery date
     await step.sleepUntil("wait-for-delivery-date", event.data.deliverAt);
     // @lesson:end
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
   },
 );
 

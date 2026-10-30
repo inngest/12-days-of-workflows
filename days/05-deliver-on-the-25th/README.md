@@ -26,20 +26,26 @@ cancelOn: [{ event: cardDeleted, match: "data.cardId" }],
 await step.sleepUntil("wait-for-delivery-date", event.data.deliverAt);
 ```
 
-The nightly cleanup is a cron trigger. A second, event trigger lets you run it now:
+```sh
+pnpm send 05 scheduled
+pnpm send 05 delete-before-delivery
+```
+
+`scheduled` delivers five seconds after it's sent. `delete-before-delivery` ends as Cancelled
+with no mail.
+
+### One more: clean up every night
+
+Drafts nobody approved pile up. A cron trigger cleans them at 3am, and a second, event trigger
+lets you run it now:
 
 ```ts
 triggers: [{ cron: "TZ=America/New_York 0 3 * * *" }, cleanupRequested],
 ```
 
 ```sh
-pnpm send 05 scheduled
-pnpm send 05 delete-before-delivery
 pnpm send 05 cleanup
 ```
-
-`scheduled` delivers five seconds after it's sent. `delete-before-delivery` ends as Cancelled
-with no mail. `cleanup` runs the draft cleanup without waiting for 3am.
 
 ## Watch it
 

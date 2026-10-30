@@ -12,7 +12,7 @@ pnpm day 09
 pnpm send 09 bulk-50-before
 ```
 
-`bulk-send-before` wraps the whole `for` loop in a single `step.run`. This is the loop-inside-a-step
+`send-to-everyone-before` wraps the whole `for` loop in a single `step.run`. This is the loop-inside-a-step
 anti-pattern: a step is the unit of retry, so one failed send retries all 50. Watch the `[mail]`
 lines: `friend1` through `friend24` are delivered twice. The fake mailer asks Inngest to retry
 after one second, so the demo is quick. Normal backoff would wait longer.
@@ -23,15 +23,13 @@ Fan out. The parent sends one event per recipient, and a second function deliver
 own run, with its own retries.
 
 ```ts
-await step.sendEvent(
-  "fan-out",
-  event.data.recipients.map((to) => cardDeliver.create({ cardId: event.data.cardId, to })),
-);
+const { cardId, recipients } = event.data;
+const deliveries = recipients.map((to) => deliveryRequested.create({ cardId, to }));
+await step.sendEvent("fan-out", deliveries);
 
 export const deliverCard = inngest.createFunction(
-  { id: "deliver-card", triggers: [cardDeliver] },
-  async ({ event, step }) =>
-    step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId })),
+  { id: "deliver-card", triggers: [deliveryRequested] },
+  async ({ event, step }) => step.run("deliver", () => sendCard(event.data)),
 );
 ```
 
@@ -43,7 +41,7 @@ Fifty `deliver-card` runs. Only the failed delivery retries, and every recipient
 
 ## Watch it
 
-In http://localhost:8288 `bulk-send` finishes almost immediately with `{ queued: 50 }`. Fifty
+In http://localhost:8288 `send-to-everyone` finishes almost immediately with `{ queued: 50 }`. Fifty
 `deliver-card` runs fan out beside it. One shows a failed attempt and a retry.
 
 The ledger wall at http://localhost:3009 shows all 50 deliveries in order, with anyone who got the

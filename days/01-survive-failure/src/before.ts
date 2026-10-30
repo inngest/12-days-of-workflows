@@ -13,7 +13,7 @@ export const createCardBefore = inngest.createFunction(
   async ({ event }) => {
     const card = await writeCard(event.data);
     const image = await renderImage({ text: card.text });
-    await sendCard({ to: event.data.to, cardId: event.data.cardId });
+    await sendCard(event.data);
     return { text: card.text, image: image.url };
   },
 );

@@ -4,11 +4,18 @@ import type { CardRequest } from "./src/events.js";
 
 export const lessonBudget = 5;
 
+const names = "Alex Bea Cal Dee Eli Fay Gus Hal Ivy Jo Kit Lou Max Nia Oz Pip Quin Rae Sol Tess";
+
+/** "Happy holidays, Alex!" Distinct text per card, so the fakes don't time every card the same. */
+const greeting = (cardId: string) => {
+  const list = names.split(" ");
+  return `Happy holidays, ${list[Number(cardId.slice(1)) % list.length]}!`;
+};
+
 const card = (cardId: string, plan: CardRequest["plan"]): CardRequest => ({
   cardId,
   plan,
-  accountId: cardId,
-  prompt: `Holiday card ${cardId}`,
+  prompt: greeting(cardId),
   to: `${cardId}@example.com`,
 });
 

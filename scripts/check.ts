@@ -103,12 +103,17 @@ async function runsSince(from: string): Promise<Run[]> {
  * stores it as ops, e.g. `[{"op":"RunComplete","data":{...}}]`; unwrap to the returned value.
  */
 async function runOutput(id: string): Promise<unknown> {
-  const { run } = await gql<{ run: { output: string | null } }>(
+  // A just-queued run can be listed before it's stored; treat that as "no output yet".
+  const result = await gql<{ run: { output: string | null } }>(
     "query Run($id: String!) { run(runID: $id) { output } }",
     { id },
-  );
-  if (!run.output) return null;
-  const parsed: unknown = JSON.parse(run.output);
+  ).catch((err: Error) => {
+    if (err.message.includes("no rows")) return null;
+    throw err;
+  });
+  const output = result?.run.output;
+  if (!output) return null;
+  const parsed: unknown = JSON.parse(output);
   const op = Array.isArray(parsed) ? parsed.find((o) => o?.op === "RunComplete") : undefined;
   return op ? op.data : parsed;
 }

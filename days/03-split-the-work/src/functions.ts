@@ -1,10 +1,10 @@
 import { renderImage, sendCard, writeCard } from "@12days/shared";
 import { inngest } from "./client.js";
-import { cardRequested, imageRequested } from "./events.js";
+import { cardRequested, invokedWithText } from "./events.js";
 
 // @lesson:start Give rendering its own function and retry policy
 export const renderCardImage = inngest.createFunction(
-  { id: "render-card-image", retries: 10, triggers: [imageRequested] },
+  { id: "render-card-image", retries: 10, triggers: [invokedWithText] },
   async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),
 );
 // @lesson:end
@@ -20,7 +20,7 @@ export const createCard = inngest.createFunction(
     });
     // @lesson:stub const image = await step.run("render-image", () => renderImage({ text: card.text }));
     // @lesson:end
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
     return { text: card.text, image: image.url };
   },
 );
