@@ -8,5 +8,5 @@ export { checkPrompt } from "./fakes/moderation.js";
 export { simulateReaction } from "./fakes/reactions.js";
 export { insertRows } from "./fakes/warehouse.js";
 export { entries, type LedgerEntry, record, reset } from "./ledger.js";
-export { startServer } from "./serve.js";
+export { startServer, type WallAction } from "./serve.js";
 export type { RunStatus, Scenario } from "./testing.js";

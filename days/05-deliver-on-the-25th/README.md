@@ -47,6 +47,9 @@ In http://localhost:8288 the `schedule-delivery` run shows `wait-for-delivery-da
 its wake-up time. Send `card/deleted` and the run flips to Cancelled. The cleanup function lists
 both triggers, and the cron's next run time, on its function page.
 
+The ledger wall at http://localhost:3005 shows a delivery appear five seconds after `scheduled`, and
+none after `delete-before-delivery`.
+
 ## In your app
 
 Replace "scheduled_at" columns and the job that scans them with an event that carries the date

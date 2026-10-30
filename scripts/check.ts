@@ -299,6 +299,18 @@ async function evaluateScenario(
   return assertScenario(scenario.expect, harness.appId, await harness.ledger(), runs);
 }
 
+// ---------- Ledger wall ----------
+
+/** The on-camera page loads and knows which day it's showing. null = pass. */
+async function checkWall(day: Day): Promise<string | null> {
+  const base = `http://localhost:${day.port}`;
+  const page = await fetch(base);
+  if (!page.ok || !(await page.text()).includes("/__ledger"))
+    return `GET / returned ${page.status}`;
+  const config = (await (await fetch(`${base}/__wall`)).json()) as { title: string };
+  return config.title.startsWith(`Day ${day.nn}:`) ? null : `wall title "${config.title}"`;
+}
+
 // ---------- Main ----------
 
 async function checkDay(day: Day): Promise<boolean> {
@@ -318,6 +330,9 @@ async function checkDay(day: Day): Promise<boolean> {
   process.once("SIGINT", onSigint);
   try {
     await harness.start();
+    const wall = await checkWall(day);
+    console.log(`${wall ? "FAIL" : "PASS"} ${day.nn} ledger-wall${wall ? `\n     ${wall}` : ""}`);
+    if (wall) ok = false;
     for (const [name, scenario] of Object.entries(mod.scenarios)) {
       const started = Date.now();
       const failures = await runScenario(harness, inngest, scenario).catch((err: Error) => [

@@ -44,6 +44,9 @@ Open http://localhost:8288 and click the `create-card` run. The timeline shows `
 finishing once, `render-image` failing twice with retry attempts, then succeeding, then `deliver`.
 Compare it with the `create-card-before` run, which is one opaque block retried three times.
 
+The ledger wall at http://localhost:3001 keeps score: LLM calls per card reads 3.0 before the fix
+and 1.0 after.
+
 ## In your app
 
 Find a handler that calls more than one external service. Move it into an Inngest function and

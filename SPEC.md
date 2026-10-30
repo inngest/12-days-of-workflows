@@ -213,6 +213,34 @@ export function startServer(opts: {
 
 **Logging.** Every fake logs one line per call in the form `[llm] writeCard c1 billed $0.004 (call #2)`. These lines are on camera, so keep the format exact.
 
+### Ledger wall
+
+A shared, on-camera view of the ledger, so the counts each lesson turns on (bills, 429s, duplicate deliveries, writes) read from across the room instead of from terminal log lines. Approved after Phase 4 as a `@12days/shared` contract change.
+
+```ts
+// serve.ts — startServer gains one optional field; index.ts stays a single call
+export type WallAction =
+  | { kind: "button"; label: string; event: string; data: Record<string, unknown> }
+  | { kind: "text"; label: string; event: string; data: Record<string, unknown>; field: string }; // sends on every keystroke
+
+export function startServer(opts: {
+  client: Inngest; functions: InngestFunction.Any[]; port?: number;
+  wall?: { actions?: WallAction[] };
+}): void;
+```
+
+- **`GET /`** serves one static `wall.html` from the shared package: inline CSS and JS, no framework, no build step, no new dependencies. It polls `GET /__ledger` every 500 ms.
+- **`GET /__wall`** returns `{ appId, title, actions }`. The title is the day's README heading (the app runs from its day folder), and the level comes from the day number.
+- **Panels, shown only once a provider has entries:** LLM (calls, dollars billed, call number per card); Image (rendered, 429, failed); Mail (deliveries in arrival order, duplicate recipients highlighted); Warehouse (writes and rows). These are the same numbers the scenario tables assert.
+- **Reset** calls `DELETE /__ledger`, so presenters can clear the wall between "break it" and "fix it".
+- **`POST /__event`** sends `{ name, data }` through the day's own client, accepting only event names listed in `wall.actions`. Actions render as buttons or text boxes above the panels.
+- **Actions, three days only**, where a person is the trigger:
+  - Day 04: buttons "Request card c1" → `card/requested` and "Approve c1" → `card/approved { cardId: "c1" }`
+  - Day 08: text boxes "Card message" → `card/edited` and "Card message (no debounce)" → `card/edited.before`, each `{ cardId: "c1", prompt }` on every keystroke
+  - Day 12: buttons "Love it" / "Meh" per card → `card/reacted`
+- **Not lesson code.** No `@lesson` markers, no budget, identical on `starter` and `main`. Scenarios in `send.ts` remain the tests; `pnpm check` asserts `GET /` serves the page and `/__wall` reports the right day (`PASS NN ledger-wall`). Every README's "Watch it" ends with one line on what the wall shows.
+- **Design hooks.** Colors and type as CSS custom properties at the top of `wall.html`, including the four level colors from the Notion tech spec, so the designer can theme it without touching JS. Every day shows its level color and title.
+
 ## Day folder contract
 
 Every day has the same seven files; only `functions.ts`, `events.ts`, `send.ts` and the README differ in substance. Build Day 1 as the template, then copy its shape.
@@ -797,6 +825,11 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 - [x] Same rules as Phase 3
 - [x] Starter fix: Days 03, 05 and 09 wrap `export const functions` in a lesson region with a stub, so the starter typechecks when a whole function is the lesson
 
+**Phase 4b: ledger wall.** Gate: `pnpm check` (all days), including each day's `ledger-wall` line
+
+- [x] `wall.html`, `GET /`, `GET /__wall`, `POST /__event` and the `wall` option per "Ledger wall" above
+- [x] Actions for Days 04 and 08 (Day 12's land with Phase 5); one "Watch it" line per README
+
 **Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters`
 
 - [ ] Day 12 on `inngest@^4.8.0` with `scoreMiddleware`
@@ -814,6 +847,8 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 - [ ] **Day 12 surface.** Confirm whether the Dev Server shows experiment variants and scores, or whether the Day 12 demo needs Inngest Cloud (and therefore a signing key in the demo flow).
 - [ ] **Plan gating.** Priority, batching (`maxSize: 50` versus plan batch limits) and Agent Evals need a check against the pricing and packaging decision before Days 10–12 publish.
 - [ ] **Contest template.** Days run locally on Express; contest entries need a live deploy link. Decide whether a separate Vercel-ready template is in scope.
+- [ ] **Ledger wall redesign (after Phase 5).** The first version reads as generic service panels. Revisit once all 12 days exist, choosing between three mocked directions: (A) before and after columns that both stay on screen, with Break it / Fix it buttons that run the scenarios; (B) one hero number per day as a plain-language outcome, with the "before" as a struck-out ghost; (C) a timeline of calls per run for timing-driven days (07, 08, 10). Each day will need a small wall config naming its hero metric.
+- [x] **Ledger wall (added after Phase 4).** Approved and built in Phase 4b. Still open: whether presenters show it beside the Dev Server, and whether the designer themes it (tokens at the top of `wall.html`) before the shoot.
 - [ ] **Finale.** `finale/` stays an empty scaffold until the livestream build is specced.
 - [x] **Throttle vs. the image fake (added Phase 4).** Day 07 `burst` got four 429s: the Dev Server's throttle starts a small burst, then one run every 2 s, while the image fake counted any 10 s sliding window. **Resolved:** the fake is now a token bucket (5 tokens, one back every 2 s), which is how Inngest's throttle and many real providers count. Lesson code unchanged; `burst` passes in ~24 s with zero 429s.
 - [ ] **Day 07 `burst-before` timing.** The 429 wall shows within seconds, so the scenario asserts only that (settle 15 s). Its retries use real backoff and finish minutes later; the check cancels them. Confirm that's acceptable on camera, or have the fake's 429 carry `retryInMs`.

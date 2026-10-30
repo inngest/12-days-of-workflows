@@ -37,6 +37,9 @@ pnpm send 10 pro-arrives-late
 In http://localhost:8288, filter runs by `create-card`. The pro runs start as soon as a slot opens,
 ahead of free runs that were queued before them.
 
+The ledger wall at http://localhost:3010 lists deliveries in order. Find `p1` and `p2` at the end,
+then near the start.
+
 ## In your app
 
 Priority only reorders work that is waiting, so it matters when a concurrency limit or throttle

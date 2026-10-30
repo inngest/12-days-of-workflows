@@ -51,6 +51,9 @@ In http://localhost:8288 the `create-card` run sits on `wait-for-approval`. Send
 watch it resume straight into `deliver`. Run `ignore` and the run ends with output
 `{ "status": "expired" }` once the timeout passes.
 
+The ledger wall at http://localhost:3004 has **Request card c1** and **Approve c1** buttons, so you
+can play the human yourself. Wait for the image to render before approving.
+
 ## In your app
 
 Anywhere you store "pending" state and poll for a change (approvals, email verification, payment

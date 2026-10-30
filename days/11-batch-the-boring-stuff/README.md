@@ -43,6 +43,9 @@ Three inserts: 50 rows, 50 rows, then the last 20 once the 5-second timeout pass
 In http://localhost:8288 `record-opens` has three runs. Open one and its trigger shows a batch of
 50 events instead of one.
 
+The ledger wall at http://localhost:3011 counts warehouse writes and rows per write: 120 writes of 1
+row, then 3 writes of up to 50.
+
 ## In your app
 
 Batch writes to warehouses, analytics and anything else billed per call. Add a `key` to batch per

@@ -45,6 +45,9 @@ delivered in about half a minute.
 In http://localhost:8288, all fifteen `create-card` runs start right away and sit on their
 `render-image` step. The `render-card-image` runs start in small groups, spread over the window.
 
+The ledger wall at http://localhost:3007 counts image renders against 429s: a wall of red before,
+zero after.
+
 ## In your app
 
 Throttling limits how many runs **start** per period. Day 06's concurrency limits how many run

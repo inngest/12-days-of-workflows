@@ -55,6 +55,9 @@ In http://localhost:8288, the `grinch` run is marked Failed after a single `mode
 a separate `create-card` failure-handler run holds the `notify-sender` step. In the `llm-429` run,
 `write-text` shows one failed attempt, then a gap of about five seconds before the retry.
 
+The ledger wall at http://localhost:3002 shows the Grinch card with zero LLM calls and one sender
+notice.
+
 ## In your app
 
 Find the places where you already know an error is final (validation, 4xx, "not found") and throw

@@ -39,6 +39,9 @@ through its burst two at a time.
 In http://localhost:8288, filter runs by `create-card`. During the burst, only two `a` runs are
 active at once and the rest are queued. `b1` goes straight to running.
 
+The ledger wall at http://localhost:3006 lists deliveries in order. Watch where `b1` lands with and
+without the per-account lane.
+
 ## In your app
 
 Key concurrency by whatever your customers share capacity across: account, workspace, API key.

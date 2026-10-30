@@ -48,6 +48,9 @@ sixth try. The LLM still bills once.
 http://localhost:8288 shows two runs: `create-card` sits on its `render-image` step while the
 `render-card-image` run retries. Click through from the parent's step to the child run.
 
+The ledger wall at http://localhost:3003 counts the image failures and shows whether the card was
+delivered.
+
 ## In your app
 
 When one dependency needs different retries, timeouts or concurrency than the rest, move it into

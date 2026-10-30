@@ -46,6 +46,9 @@ Fifty `deliver-card` runs. Only the failed delivery retries, and every recipient
 In http://localhost:8288 `bulk-send` finishes almost immediately with `{ queued: 50 }`. Fifty
 `deliver-card` runs fan out beside it. One shows a failed attempt and a retry.
 
+The ledger wall at http://localhost:3009 shows all 50 deliveries in order, with anyone who got the
+card twice in red.
+
 ## In your app
 
 One step per side effect: never put a loop of side effects inside one `step.run`. If the parent

@@ -68,3 +68,13 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Generating the starter branch caught a bug from Phase 3. When a lesson region removes a whole function (Days 03 and 05), the `functions` array still mentions it and the starter doesn't compile. The fix doubles as a lesson beat: "register the new function" is now its own tiny TODO, with a stub that leaves it out.
 - Batching's handler takes `events`, not `event`, so the starter's stub swaps in the naive one-insert-per-event handler. The code-along starts from exactly the "before" behavior and ends at three writes.
 - Priority needed no tricks. With a concurrency limit of 2 forming a queue, two pro cards that arrive late jump ahead of twenty free ones. The same "send the late arrivals 2 s after the burst" timing from Day 06 kept it steady.
+
+## Phase 4b: ledger wall
+
+- Halfway through, we asked whether each day needed a UI. The Dev Server already shows the runs, but the proof of each lesson lived in terminal lines like `billed $0.004 (call #3)`, which is tiny on camera. The numbers that matter are counts and orderings, and those deserve to be big.
+- So every day now serves one shared page at its own port: big tallies for LLM bills, image 429s, deliveries in order with duplicates in red, and warehouse writes. They're the same numbers the scenario tests check, read from the same ledger.
+- It's one static HTML file in the shared package, with no framework and no build step. Each day's `index.ts` is still a single `startServer` call, and none of it counts as lesson code, so the starter branch and the line budgets don't change.
+- Three days have a human as the trigger, and `pnpm send` hides that. Day 04 got Request and Approve buttons, so the presenter plays the approver. Day 08 got two text boxes that send an event on every keystroke, with and without debounce. Typing "Hi team!" bills eight times in one box and once in the other, which shows the lesson better than any scripted burst. Day 12's reaction buttons come with Day 12.
+- One catch from testing: our browser automation typed whole words as a single input event, so the first debounce demo looked broken. Sending one event per character, the way a person types, fixed it.
+- The page sends events through the day's own client, and only accepts event names that day lists. A stray request can't fire `card/deleted` at Day 05 by accident.
+- The colors are named variables at the top of the file, including the four level colors from the Notion tech spec. The designer can brand it without touching code.

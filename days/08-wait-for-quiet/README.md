@@ -45,6 +45,10 @@ and the `key` gives each card its own timer: two bills, one per card.
 In http://localhost:8288 the eight `card/edited` events all show up in the event stream, but
 `regenerate-preview` has a single run, and its event is the last edit.
 
+The ledger wall at http://localhost:3008 has two text boxes. Type into **Card message (no
+debounce)** and the LLM bill climbs with every keystroke. Hit **Reset**, type into **Card
+message**, and it bills once.
+
 ## In your app
 
 Debounce anything driven by bursts of user input: autosave, search-as-you-type, re-indexing after
