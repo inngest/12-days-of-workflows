@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hearth Post</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500..800&family=Figtree:wght@400..800&family=JetBrains+Mono:wght@500..800&display=swap" />
+<!-- Hearth Post tokens and components, from the design system (see wall/hearth.css). -->
+<link rel="stylesheet" href="/wall.css" />
+<style>
+  /* Page layout only: every color, size and shape comes from the Hearth Post tokens. */
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--ink); font: 400 22px/32px var(--font-sans); }
+  .wall { max-width: 1840px; margin: 0 auto; padding: var(--space-6); display: grid; gap: var(--space-5); }
+  .wall__bar { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-4) var(--space-5); }
+  .wall__bar .hp-field { flex: 0 1 460px; }
+  .wall__spacer { flex: 1; }
+  .wall__sent { font: 500 18px/24px var(--font-sans); color: var(--muted); align-self: center; }
+  .wall__split { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+  .wall__stack { display: grid; gap: var(--space-5); min-width: 0; }
+  .wall__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-5); }
+  .wall__empty { padding: var(--space-7) var(--space-5); text-align: center; color: var(--muted); }
+  .wall__empty code { display: inline-block; margin-top: var(--space-2); padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); background: var(--surface-sunken); color: var(--ink); font: 500 20px/28px var(--font-mono); }
+  .wall__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .hp-slot[data-me] { width: auto; min-width: 48px; padding: 0 8px; border: 2px solid var(--brand); background: var(--brand); color: var(--on-brand); font-size: 18px; }
+  .hp-slot[data-me]::before { content: "b1"; }
+  .hp-lane__slots { min-width: 0; }
+  .hp-calls__grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-3); }
+  .hp-call { font-size: 34px; gap: var(--space-1); }
+  .hp-call small { font-size: 18px; }
+  .hp-ba__col { min-height: 0; }
+  .hp-seg button { white-space: nowrap; }
+  .hp-q__name b { font-weight: 800; }
+  @media (max-width: 900px) {
+    .wall { padding: var(--space-4); }
+    .wall__split { grid-template-columns: 1fr; }
+    .hp-card { max-width: 340px; }
+    .hp-cost__total, .hp-stat__value { font-size: 72px; }
+    .hp-stat--xl .hp-stat__value { font-size: 120px; line-height: 116px; }
+  }
+</style>
+</head>
+<body>
+<main class="wall">
+  <header class="hp-day hp-lv-work" id="day"></header>
+
+  <div class="wall__bar" id="bar">
+    <div class="hp-seg" id="sides"></div>
+    <span class="wall__spacer"></span>
+    <span class="wall__sent" id="sent"></span>
+    <button type="button" class="hp-btn hp-btn--secondary" id="reset">Reset</button>
+  </div>
+
+  <div class="hp-ba" id="stage"></div>
+</main>
+
+<script>
+  const LEVELS = [
+    { upTo: 3, name: "Make it work", cls: "hp-lv-work" },
+    { upTo: 6, name: "Make it scale", cls: "hp-lv-scale" },
+    { upTo: 9, name: "Make it faster", cls: "hp-lv-faster" },
+    { upTo: 12, name: "Make it profitable", cls: "hp-lv-profitable" },
+  ];
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const usd = (n) => `$${n.toFixed(3)}`;
+  const isBefore = (e) => String(e.fn ?? "").endsWith("-before");
+  const where = (E, provider, op) => E.filter((e) => e.provider === provider && (!op || e.op === op));
+  const badge = (tone, state, label, extra = "") =>
+    `<span class="hp-badge ${extra}" data-tone="${tone}" data-state="${state}">${esc(label)}</span>`;
+  const stat = ({ label, value, unit = "", note = "", tone = "", size = "" }) =>
+    `<div class="hp-stat ${size}" ${tone ? `data-tone="${tone}"` : ""}><span class="hp-stat__label">${esc(label)}</span>` +
+    `<span class="hp-stat__value">${value}${unit ? `<span class="hp-stat__unit">${esc(unit)}</span>` : ""}</span>` +
+    `${note ? `<p class="hp-stat__note">${note}</p>` : ""}</div>`;
+  const empty = (command) =>
+    `<div class="wall__empty">Nothing here yet.<br />${command ? `Run <code>${esc(command)}</code>` : "Use the buttons above."}</div>`;
+
+  // ---- Day 01: the same card text, billed again on every retry ----
+  function day01(E, side, other) {
+    const llm = where(E, "llm", "writeCard").filter((e) => e.ok);
+    if (!llm.length) return null;
+    const image = where(E, "image", "renderImage");
+    const mailOk = where(E, "mail", "sendCard").some((e) => e.ok);
+    const imageOk = image.some((e) => e.ok);
+    const failedCalls = image.filter((e) => !e.ok).length;
+    const bills = llm.length;
+    const unit = llm[0].costUsd ?? 0;
+    const total = llm.reduce((sum, e) => sum + (e.costUsd ?? 0), 0);
+    const fixed = side === "after";
+    const tone = bills > 1 ? "danger" : fixed ? "good" : "warn";
+    const otherBills = where(other, "llm", "writeCard").filter((e) => e.ok).length;
+
+    const ticks = llm.map((e, i) => `<span class="hp-tick" ${i === 0 ? (tone === "good" ? "data-good" : "") : "data-extra"}>${usd(e.costUsd ?? 0)}</span>`);
+    const saved = fixed ? Array.from({ length: failedCalls }, () => `<span class="hp-tick" data-saved>${usd(unit)}</span>`) : [];
+
+    const art = imageOk ? `<div class="hp-card__art"><i class="hp-tree"></i></div>`
+      : failedCalls ? `<div class="hp-card__art" data-art="failed"><div class="hp-card__artnote">Artwork failed<small>Try ${image.length}, still trying</small></div></div>`
+      : `<div class="hp-card__art" data-art="painting"><div class="hp-card__artnote">Painting…</div></div>`;
+    const foot = mailOk ? badge("good", "sent", "Sent")
+      : failedCalls && !imageOk ? badge("warn", "retrying", `Retrying, try ${image.length + 1}`, "") .replace("<span", "<span data-live")
+      : badge("neutral", "painting", "Painting").replace("<span", "<span data-live");
+    const to = where(E, "mail", "sendCard")[0]?.meta?.to ?? "grandma@example.com";
+    const card =
+      `<article class="hp-card">${mailOk ? `<span class="hp-card__stamp">Sent</span>` : ""}${art}` +
+      `<div class="hp-card__body"><p class="hp-card__msg">${esc(llm[0].meta?.prompt ?? "")}</p><p class="hp-card__to">To <b>${esc(to)}</b></p></div>` +
+      `<div class="hp-card__foot">${foot}</div></article>`;
+
+    const note = !fixed ? `should be <b>1×</b>` : otherBills > 1 ? `was <b>${otherBills}×</b> before the fix` : `retries reused the saved text`;
+    const meter =
+      `<div class="hp-cost" data-tone="${tone}"><div class="hp-cost__head">` +
+      `<div class="hp-stat"><span class="hp-stat__label">Message billed</span><span class="hp-cost__total">${usd(total)}</span></div>` +
+      `<span class="hp-chip" data-tone="${tone}">Billed ${bills}×</span></div>` +
+      `<div class="hp-cost__ticks">${[...ticks, ...saved].join("")}</div>` +
+      `<div class="hp-cost__bar" aria-hidden="true"><i style="--pct:${Math.min(100, (total / Math.max(unit * 3, 0.0001)) * 100)}%"></i></div>` +
+      `<div class="hp-cost__foot">${!fixed ? `<span>Same card text, <b>bought ${bills} time${bills === 1 ? "" : "s"}</b></span><span>should be ${usd(unit)}</span>` : `<span>Retries reused the saved text</span><span><b>${usd(unit * failedCalls)} saved</b></span>`}</div></div>`;
+    const hero = stat({ label: "LLM billed", value: `${bills}×`, unit: "for the same text", note, tone, size: "hp-stat--xl" });
+    return {
+      body: `<div class="wall__split">${card}<div class="wall__stack">${hero}${meter}</div></div>`,
+      verdict: !fixed ? `Paid ${usd(total)} for one card` : `Paid ${usd(total)} for one card, once`,
+    };
+  }
+
+  // ---- Day 06: where does the second customer's card land? ----
+  function day06(E, side) {
+    if (!E.length) return null;
+    const mails = where(E, "mail", "sendCard").filter((e) => e.ok).map((e) => e.cardId);
+    const started = new Set(E.map((e) => e.cardId));
+    const total = 21;
+    const pos = mails.indexOf("b1") + 1;
+    const aDone = mails.filter((id) => id.startsWith("a")).length;
+    const bStarted = started.has("b1");
+    const slow = pos > 10;
+    const tone = pos ? (slow ? "danger" : "good") : "warn";
+
+    const hero = stat({
+      label: "Maisie's queue spot",
+      value: pos ? `#${pos}` : "—",
+      note: pos ? `of ${total} cards delivered` : bStarted ? "running now" : `waiting behind <b>${20 - aDone}</b> cards`,
+      tone,
+      size: "hp-stat--xl",
+    });
+
+    const maisieBadge = pos ? badge(slow ? "danger" : "good", "sent", `Delivered #${pos}`)
+      : bStarted ? badge("neutral", "painting", "Running now", "").replace("<span", "<span data-live")
+      : badge("warn", "waiting", `Waiting behind ${20 - aDone}`);
+    const rows =
+      `<ul class="hp-queue">` +
+      `<li class="hp-q" data-group ${aDone < 20 ? "data-running" : ""}><span class="hp-q__pos">${aDone < 20 ? 20 - aDone : "✓"}</span><span class="hp-q__avatar">N</span>` +
+      `<div><p class="hp-q__name">Northpole Co. ×20</p><p class="hp-q__sub">account a · ${aDone} delivered</p></div>` +
+      `${aDone < 20 ? badge("neutral", "queued", "Sending", "hp-badge--sm") : badge("good", "sent", "All sent", "hp-badge--sm")}</li>` +
+      `<li class="hp-q" ${!pos && !bStarted ? "data-you" : ""} ${bStarted && !pos ? "data-running" : ""}><span class="hp-q__pos">${pos ? `#${pos}` : "b1"}</span><span class="hp-q__avatar">M</span>` +
+      `<div><p class="hp-q__name">Maisie</p><p class="hp-q__sub">account b · one card</p></div>${maisieBadge}</li></ul>`;
+
+    const slot = (s, me = "") => `<span class="hp-slot" ${s ? `data-s="${s}"` : ""} ${me}></span>`;
+    const order = Array.from({ length: total }, (_, i) => (i < mails.length ? (mails[i] === "b1" ? slot("run", "data-me") : slot("done")) : slot("")));
+    const aLane = Array.from({ length: 20 }, (_, i) => {
+      const id = `a${i + 1}`;
+      return slot(mails.includes(id) ? "done" : started.has(id) ? "run" : "");
+    });
+    const lanes =
+      `<div class="hp-lanes">` +
+      `<div class="hp-lane"><div><p class="hp-lane__name">Delivery order</p><p class="hp-lane__sub">first to last</p></div><div class="hp-lane__slots">${order.join("")}</div></div>` +
+      `<div class="hp-lane"><div><p class="hp-lane__name">Northpole Co.</p><p class="hp-lane__sub">account a</p></div><div class="hp-lane__slots">${aLane.join("")}</div></div>` +
+      `<div class="hp-lane"><div><p class="hp-lane__name">Maisie</p><p class="hp-lane__sub">account b</p></div><div class="hp-lane__slots">${slot(pos ? "done" : bStarted ? "run" : "")}</div></div></div>`;
+
+    return {
+      body: `<div class="wall__stack">${hero}${rows}${lanes}</div>`,
+      verdict: pos ? `Maisie's card went out #${pos} of ${total}` : `Maisie's card is waiting in line`,
+    };
+  }
+
+  // ---- Day 07: a wall of 429s, or none ----
+  function day07(E, side) {
+    const image = where(E, "image", "renderImage");
+    if (!image.length) return null;
+    const failedBefore = new Set();
+    const tiles = image.map((e) => {
+      if (!e.ok) {
+        failedBefore.add(e.cardId);
+        const status = e.meta?.status ?? 500;
+        return `<div class="hp-call" data-tone="danger">${status === 429 ? "429" : "✕"}<small>${esc(e.cardId ?? "")}</small></div>`;
+      }
+      return failedBefore.has(e.cardId)
+        ? `<div class="hp-call" data-tone="warn">↻<small>${esc(e.cardId ?? "")}</small></div>`
+        : `<div class="hp-call" data-tone="good">✓<small>${esc(e.cardId ?? "")}</small></div>`;
+    });
+    const limited = image.filter((e) => !e.ok && e.meta?.status === 429).length;
+    const rendered = image.filter((e) => e.ok).length;
+    const cards = new Set(image.map((e) => e.cardId)).size;
+    const tone = limited ? "danger" : "good";
+    const head =
+      stat({ label: "Rate limited", value: limited, note: limited ? "renders refused with a 429" : "no render refused", tone, size: "hp-stat--xl" }) +
+      stat({ label: "Rendered", value: rendered, note: `of <b>${cards}</b> cards`, tone: "good" }) +
+      stat({ label: "Calls made", value: image.length, note: "to the image service" });
+    return {
+      body: `<div class="hp-calls"><div class="hp-calls__head">${head}</div><div class="hp-calls__grid">${tiles.join("")}</div></div>`,
+      verdict: limited ? `${limited} of ${image.length} calls were refused` : `All ${rendered} renders accepted first time`,
+    };
+  }
+
+  // ---- Every other day: the ledger as Hearth Post panels ----
+  function generic(E) {
+    if (!E.length) return null;
+    const panels = [];
+    const panel = (label, value, notes, tone = "") =>
+      panels.push(`<div class="hp-stat hp-stat--panel" ${tone ? `data-tone="${tone}"` : ""}><span class="hp-stat__label">${label}</span><span class="hp-stat__value">${value}</span><p class="hp-stat__note">${notes.join("<br />")}</p></div>`);
+
+    const llm = where(E, "llm", "writeCard");
+    if (llm.length) {
+      const billed = llm.filter((e) => e.ok).reduce((sum, e) => sum + (e.costUsd ?? 0), 0);
+      const cards = new Set(llm.map((e) => e.cardId)).size;
+      panel("LLM calls", llm.length, [`${usd(billed)} billed`, `${(llm.length / Math.max(cards, 1)).toFixed(1)} calls per card`], llm.length > cards ? "danger" : "");
+    }
+    const image = where(E, "image", "renderImage");
+    if (image.length) {
+      const limited = image.filter((e) => !e.ok && e.meta?.status === 429).length;
+      const failed = image.filter((e) => !e.ok).length - limited;
+      panel("Image renders", image.filter((e) => e.ok).length, [`${limited ? "✕ " : ""}${limited} rate limited (429)`, `${failed ? "✕ " : ""}${failed} failed`], limited || failed ? "danger" : "good");
+    }
+    const mail = where(E, "mail", "sendCard");
+    const notices = where(E, "mail", "notifySender");
+    const delivered = mail.filter((e) => e.ok);
+    const perRecipient = new Map();
+    for (const e of delivered) perRecipient.set(e.meta?.to, (perRecipient.get(e.meta?.to) ?? 0) + 1);
+    const duplicates = [...perRecipient.values()].filter((n) => n > 1).length;
+    if (mail.length || notices.length) {
+      const notes = [`${mail.length > delivered.length ? "✕ " : ""}${mail.length - delivered.length} failed attempts`, `${duplicates} got it twice`];
+      if (notices.length) notes.push(`${notices.length} sender notified`);
+      panel("Cards sent", delivered.length, notes, duplicates ? "danger" : "");
+    }
+    const writes = where(E, "warehouse", "insertRows");
+    if (writes.length) {
+      const rows = writes.reduce((sum, e) => sum + Number(e.meta?.rows ?? 0), 0);
+      panel("Warehouse writes", writes.length, [`${rows} rows inserted`, `${(rows / writes.length).toFixed(1)} rows per write`]);
+    }
+
+    let order = "";
+    if (mail.length) {
+      const oneCard = new Set(mail.map((e) => e.cardId)).size === 1 && perRecipient.size > 1;
+      const seen = new Map();
+      const chips = mail.map((e, i) => {
+        const who = esc(oneCard ? String(e.meta?.to).split("@")[0] : e.cardId);
+        if (!e.ok) return `<span class="hp-chip" data-tone="danger">✕ ${who}</span>`;
+        const n = (seen.get(e.meta?.to) ?? 0) + 1;
+        seen.set(e.meta?.to, n);
+        return n > 1 ? `<span class="hp-chip" data-tone="danger">${i + 1} ${who} ×${n}</span>` : `<span class="hp-chip" data-tone="neutral">${i + 1} ${who}</span>`;
+      });
+      order = `<div class="hp-stat"><span class="hp-stat__label">Delivery order</span></div><div class="wall__chips">${chips.join("")}</div>`;
+    }
+    return { body: `<div class="wall__stack"><div class="wall__grid">${panels.join("")}</div>${order}</div>`, verdict: `${E.length} calls recorded` };
+  }
+
+  const DAYS = {
+    1: { title: "Retries bill the same card again", sub: "A flaky image service made the whole run start over.", before: "pnpm send 01 flaky-image-before", after: "pnpm send 01 flaky-image", view: day01 },
+    6: { title: "One customer blocks everyone", sub: "Account a sent 20 cards, then Maisie sent one.", before: "pnpm send 06 noisy-neighbor-before", after: "pnpm send 06 noisy-neighbor", view: day06 },
+    7: { title: "The image service says slow down", sub: "15 cards at once, and it allows 5 renders per 10 seconds.", before: "pnpm send 07 burst-before", after: "pnpm send 07 burst", view: day07 },
+  };
+
+  // Auto mode follows the run that started most recently: the side of the newest card/side pair
+// seen. Retries trickling in from an older run (Day 07 backoff) never flip the view.
+const state = { day: 0, config: null, mode: "auto", auto: "before", seen: new Set(), ledger: [], sig: "", sent: 0 };
+
+  const sides = (ledger) => ({ before: ledger.filter(isBefore), after: ledger.filter((e) => !isBefore(e)) });
+  function shownSides(ledger) {
+    if (state.mode === "both") return ["before", "after"];
+    if (state.mode !== "auto") return [state.mode];
+    return [state.auto];
+  }
+
+  function render() {
+    const { before, after } = sides(state.ledger);
+    const data = { before, after };
+    const day = DAYS[state.day];
+    const view = day?.view ?? generic;
+    const shown = shownSides(state.ledger);
+    const nn = String(state.day).padStart(2, "0");
+
+    const cols = shown.map((side) => {
+      const out = view(data[side], side, data[side === "before" ? "after" : "before"]);
+      const hint = day ? day[side] : state.day ? `pnpm send ${nn} <scenario>${side === "before" ? "-before" : ""}` : "";
+      const tone = side === "before" ? "danger" : "good";
+      return (
+        `<section class="hp-ba__col" data-tone="${tone}"><div class="hp-ba__tag">${side}<span>${side === "before" ? "without the fix" : "with the fix"}</span></div>` +
+        `<div class="hp-ba__body">${out ? out.body : empty(hint)}</div>` +
+        `<div class="hp-ba__verdict">${out ? esc(out.verdict) : "No run yet"}</div></section>`
+      );
+    });
+    document.getElementById("stage").innerHTML = cols.join("");
+
+    // The header verdict follows what is on screen; with both sides shown it stays neutral.
+    const verdict = shown.length === 2 ? badge("neutral", "waiting", "Before and after")
+      : shown[0] === "before" ? badge("danger", "failed", "Broken") : badge("good", "sent", "Fixed");
+    document.getElementById("day").querySelector(".hp-day__verdict").innerHTML = verdict;
+
+    const pressed = shown.length === 2 ? "both" : shown[0];
+    for (const b of document.querySelectorAll("#sides button")) b.setAttribute("aria-pressed", String(b.dataset.mode === pressed));
+  }
+
+  function renderHeader(config) {
+    const level = LEVELS.find((l) => state.day <= l.upTo) ?? LEVELS[0];
+    const day = DAYS[state.day];
+    const title = day?.title ?? config.title.replace(/^Day \d+[a-z]?:\s*/i, "");
+    const header = document.getElementById("day");
+    header.className = `hp-day ${level.cls}`;
+    header.innerHTML =
+      `<div class="hp-day__level"><span class="hp-day__num">${state.day ? String(state.day).padStart(2, "0") : "·"}</span><span class="hp-day__name">${level.name}</span></div>` +
+      `<div class="hp-day__main"><h1 class="hp-day__title">${esc(title)}</h1>${day ? `<p class="hp-day__sub">${esc(day.sub)}</p>` : ""}</div>` +
+      `<div class="hp-day__verdict"></div>`;
+    document.title = `Hearth Post · ${config.title}`;
+  }
+
+  function renderBar(config) {
+    const seg = document.getElementById("sides");
+    seg.innerHTML =
+      `<button type="button" data-mode="before" data-tone="danger" aria-pressed="false">Before</button>` +
+      `<button type="button" data-mode="after" data-tone="good" aria-pressed="false">After</button>` +
+      `<button type="button" data-mode="both" aria-pressed="false">Side by side</button>`;
+    seg.onclick = (ev) => {
+      const mode = ev.target.dataset?.mode;
+      if (!mode) return;
+      state.mode = mode;
+      render();
+    };
+    const bar = document.getElementById("bar");
+    const anchor = document.querySelector("#sides").nextSibling;
+    config.actions.forEach((action, i) => {
+      if (action.kind === "button") {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = i === 0 ? "hp-btn" : "hp-btn hp-btn--secondary";
+        button.textContent = action.label;
+        button.onclick = () => sendEvent(action.event, action.data);
+        bar.insertBefore(button, anchor);
+      } else {
+        const field = document.createElement("div");
+        field.className = "hp-field";
+        const id = `field-${i}`;
+        field.innerHTML = `<label for="${id}">${esc(action.label)}</label><input class="hp-input" id="${id}" placeholder="Start typing…" autocomplete="off" />`;
+        field.querySelector("input").oninput = (ev) => sendEvent(action.event, { ...action.data, [action.field]: ev.target.value });
+        bar.insertBefore(field, anchor);
+      }
+    });
+  }
+
+  async function sendEvent(name, data) {
+    await fetch("/__event", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, data }) });
+    state.sent++;
+    document.getElementById("sent").textContent = `${state.sent} event${state.sent === 1 ? "" : "s"} sent`;
+  }
+
+  async function loadConfig() {
+    const config = await (await fetch("/__wall")).json();
+    state.day = Number(config.appId.replace(/\D/g, "")) || 0;
+    state.config = config;
+    renderHeader(config);
+    renderBar(config);
+    render();
+  }
+
+  async function poll() {
+    try {
+      const ledger = await (await fetch("/__ledger")).json();
+      const last = ledger[ledger.length - 1];
+      const sig = `${ledger.length}:${last?.at ?? 0}`;
+      if (sig !== state.sig && state.config) {
+        state.sig = sig;
+        state.ledger = ledger;
+        for (const e of ledger) {
+          const side = isBefore(e) ? "before" : "after";
+          const key = `${side}:${e.cardId}`;
+          if (!state.seen.has(key)) {
+            state.seen.add(key);
+            state.auto = side;
+          }
+        }
+        render();
+      }
+    } catch {}
+    setTimeout(poll, 500);
+  }
+
+  document.getElementById("reset").onclick = async () => {
+    await fetch("/__ledger", { method: "DELETE" });
+    state.sent = 0;
+    state.mode = "auto";
+    state.ledger = [];
+    state.sig = "";
+    document.getElementById("sent").textContent = "";
+    render();
+  };
+
+  const scheme = window.matchMedia("(prefers-color-scheme: dark)");
+  const applyScheme = () => (document.documentElement.dataset.theme = scheme.matches ? "dark" : "light");
+  applyScheme();
+  scheme.addEventListener("change", applyScheme);
+
+  loadConfig().then(poll);
+</script>
+</body>
+</html>

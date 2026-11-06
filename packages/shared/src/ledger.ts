@@ -1,3 +1,4 @@
+import { currentFnId } from "./chaos.js";
 export type Provider = "llm" | "image" | "mail" | "warehouse";
 
 export type LedgerEntry = {
@@ -8,6 +9,7 @@ export type LedgerEntry = {
   ok: boolean;
   costUsd?: number;
   meta?: Record<string, unknown>;
+  fn?: string; // id of the function that made the call; the wall splits Broken from Fixed on "-before"
 };
 
 const log: LedgerEntry[] = [];
@@ -15,7 +17,7 @@ const callCounts = new Map<string, number>();
 const resetHooks: (() => void)[] = [];
 
 export function record(entry: LedgerEntry): void {
-  log.push(entry);
+  log.push({ ...entry, fn: currentFnId() });
 }
 
 export function entries(): LedgerEntry[] {

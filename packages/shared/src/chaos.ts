@@ -13,25 +13,25 @@ export type ChaosSpec = {
 
 export type Chaos = { llm?: ChaosSpec; image?: ChaosSpec; mail?: ChaosSpec };
 
-type RunStore = { cardId?: string; chaos?: Chaos };
+type RunStore = { cardId?: string; chaos?: Chaos; fn?: string };
 
 const runStore = new AsyncLocalStorage<RunStore>();
 
-function storeFrom(ctx: Middleware.WrapFunctionHandlerArgs["ctx"]): RunStore {
-  const data = (ctx.event?.data ?? {}) as RunStore;
-  return { cardId: data.cardId, chaos: data.chaos };
+function storeFrom(args: Middleware.WrapFunctionHandlerArgs): RunStore {
+  const data = (args.ctx.event?.data ?? {}) as RunStore;
+  return { cardId: data.cardId, chaos: data.chaos, fn: args.fn.id() };
 }
 
-/** Puts `event.data.chaos` and `event.data.cardId` where every fake can read them. */
+/** Puts `event.data.chaos`, `event.data.cardId` and the function id where every fake can read them. */
 export const chaosMiddleware = class ChaosMiddleware extends Middleware.BaseMiddleware {
   readonly id = "12days-chaos";
 
-  wrapFunctionHandler({ ctx, next }: Middleware.WrapFunctionHandlerArgs) {
-    return runStore.run(storeFrom(ctx), () => next());
+  wrapFunctionHandler(args: Middleware.WrapFunctionHandlerArgs) {
+    return runStore.run(storeFrom(args), () => args.next());
   }
 
-  wrapStepHandler({ ctx, next }: Middleware.WrapStepHandlerArgs) {
-    return runStore.run(storeFrom(ctx), () => next());
+  wrapStepHandler(args: Middleware.WrapStepHandlerArgs) {
+    return runStore.run(storeFrom(args), () => args.next());
   }
 
   // Child runs (step.invoke, step.sendEvent) inherit this run's cardId and chaos.
@@ -58,6 +58,11 @@ function withRunStore(data: Record<string, unknown> | undefined): Record<string,
 /** Internal: the cardId of the run currently executing, if any. */
 export function currentCardId(): string | undefined {
   return runStore.getStore()?.cardId;
+}
+
+/** Internal: the id of the function whose run is executing, e.g. "create-card-before". */
+export function currentFnId(): string | undefined {
+  return runStore.getStore()?.fn;
 }
 
 /**
