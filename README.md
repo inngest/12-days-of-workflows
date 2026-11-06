@@ -27,6 +27,7 @@ keeps the business running through the season.
 | Make it profitable | [10](days/10-paid-users-first) | Paying customers wait behind the free tier. |
 | | [11](days/11-batch-the-boring-stuff) | Every "card opened" is its own billed database write. |
 | | [12](days/12-measure-what-works) | He rewrote the card prompt. Do recipients actually love it more? |
+| | [12b](days/12b-design-agent) | An AI agent designs each card as code. Where does that code run, and is it any good? |
 
 The AI, image, mail and database services are fakes in `packages/shared`. They fail on cue and
 keep a ledger of every call, so you can see exactly what each fix saves. No API keys needed.
