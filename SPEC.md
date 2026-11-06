@@ -231,17 +231,23 @@ export function startServer(opts: {
 }): void;
 ```
 
-- **`GET /`** serves one static `wall.html` from the shared package: inline CSS and JS, no framework, no build step, no new dependencies. It polls `GET /__ledger` every 500 ms.
+- **`GET /`** serves one static page, `wall/index.html`, with the Hearth Post design system's CSS (tokens plus component classes, `wall/hearth.css`) served at `GET /wall.css`. Inline JS, no framework, no build step, no new dependencies. It polls `GET /__ledger` every 500 ms and follows the system's light or dark setting.
+- **`fn` ledger field.** `LedgerEntry` gains `fn?: string`, the id of the function whose run made the call (the chaos middleware stores it in `AsyncLocalStorage` next to `cardId`; `record()` stamps it). Entries whose `fn` ends in `-before` are the Broken run, everything else is Fixed. Existing fields and the fake log-line format are unchanged.
 - **`GET /__wall`** returns `{ appId, title, actions }`. The title is the day's README heading (the app runs from its day folder), and the level comes from the day number.
-- **Panels, shown only once a provider has entries:** LLM (calls, dollars billed, call number per card); Image (rendered, 429, failed); Mail (deliveries in arrival order, duplicate recipients highlighted); Warehouse (writes and rows). These are the same numbers the scenario tables assert.
+- **Every screen** has a DayHeader (level color, plain-language title, Broken or Fixed badge), a Before / After / Side by side switch, the day's wall actions, and Reset. Auto mode shows the run that started most recently; the switch pins a side. Each side ends in a one-line verdict, and nothing relies on colour alone (glyphs, hatching, words).
+- **Bespoke screens, Days 01, 06 and 07.**
+  - Day 01: card preview plus "LLM billed N×", with a cost meter. Broken: 3× with hatched repeat bills. Fixed: 1× and dashed "saved" ticks.
+  - Day 06: Maisie's queue spot (`b1`'s delivery position, of 21), grouped account rows and lanes. Broken: about #21. Fixed: about #3.
+  - Day 07: a grid of image calls with a big "Rate limited" count. Broken: a wall of 429 tiles. Fixed: all ✓, 0.
+- **Every other day** falls back to a generic Hearth Post view: counts for LLM calls, image renders, cards sent and warehouse writes as stat panels, plus the delivery order as chips (duplicates and failures flagged). The same Before / After split applies.
 - **Reset** calls `DELETE /__ledger`, so presenters can clear the wall between "break it" and "fix it".
-- **`POST /__event`** sends `{ name, data }` through the day's own client, accepting only event names listed in `wall.actions`. Actions render as buttons or text boxes above the panels.
+- **`POST /__event`** sends `{ name, data }` through the day's own client, accepting only event names listed in `wall.actions`. Actions render as buttons or text boxes beside the switch.
 - **Actions, three days only**, where a person is the trigger:
   - Day 04: buttons "Request card c1" → `card/requested` and "Approve c1" → `card/approved { cardId: "c1" }`
   - Day 08: text boxes "Card message" → `card/edited` and "Card message (no debounce)" → `card/edited.before`, each `{ cardId: "c1", prompt }` on every keystroke
   - Day 12: buttons "Love it" / "Meh" per card → `card/reacted`
 - **Not lesson code.** No `@lesson` markers, no budget, identical on `starter` and `main`. Scenarios in `send.ts` remain the tests; `pnpm check` asserts `GET /` serves the page and `/__wall` reports the right day (`PASS NN ledger-wall`). Every README's "Watch it" ends with one line on what the wall shows.
-- **Design hooks.** Colors and type as CSS custom properties at the top of `wall.html`, including the four level colors from the Notion tech spec, so the designer can theme it without touching JS. Every day shows its level color and title.
+- **Design hooks.** Colors and type are the design system's tokens in `wall/hearth.css`, including the four level colors from the Notion tech spec. Every day shows its level color and title.
 
 ## Day folder contract
 

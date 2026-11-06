@@ -11,7 +11,8 @@ export type WallAction =
   | { kind: "button"; label: string; event: string; data: Record<string, unknown> }
   | { kind: "text"; label: string; event: string; data: Record<string, unknown>; field: string };
 
-const wallPage = new URL("./wall.html", import.meta.url);
+const wallPage = new URL("./wall/index.html", import.meta.url);
+const wallStyles = new URL("./wall/hearth.css", import.meta.url);
 
 /** The day's README heading, e.g. "Day 04: How do I wait…". The app runs from its day folder. */
 function dayTitle(fallback: string): string {
@@ -53,6 +54,9 @@ export function startServer(opts: {
   // The ledger wall: an on-camera view of the ledger, plus the day's wall actions.
   app.get("/", (_req, res) => {
     res.type("html").send(readFileSync(wallPage, "utf8"));
+  });
+  app.get("/wall.css", (_req, res) => {
+    res.type("css").send(readFileSync(wallStyles, "utf8"));
   });
   app.get("/__wall", (_req, res) => {
     res.json({ appId: opts.client.id, title: dayTitle(opts.client.id), actions });
