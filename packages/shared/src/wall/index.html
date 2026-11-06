@@ -30,11 +30,15 @@
   .hp-call { font-size: 34px; gap: var(--space-1); }
   .hp-call small { font-size: 18px; }
   .hp-ba__col { min-height: 0; }
+  .hp-stat__unit { white-space: nowrap; }
+  .hp-cost--many .hp-tick { min-width: 0; padding: 6px 8px; font-size: 14px; }
+  .hp-call--wide small { margin-left: var(--space-3); }
   .hp-seg button { white-space: nowrap; }
   .hp-q__name b { font-weight: 800; }
   @media (max-width: 900px) {
     .wall { padding: var(--space-4); }
     .wall__split { grid-template-columns: 1fr; }
+    .hp-seg button { padding: 8px 14px; }
     .hp-card { max-width: 340px; }
     .hp-cost__total, .hp-stat__value { font-size: 72px; }
     .hp-stat--xl .hp-stat__value { font-size: 120px; line-height: 116px; }
@@ -199,6 +203,246 @@
     };
   }
 
+  // ---- Shared pieces for the next five days ----
+  const live = (html) => html.replace("<span", "<span data-live");
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const secs = (ms) => `${(ms / 1000).toFixed(1)} s`;
+  const timeline = (items) =>
+    `<ol class="hp-tl">${items
+      .map(
+        (i) =>
+          `<li class="hp-tl__item" data-state="${i.state}" data-tone="${i.tone}"><span class="hp-tl__node"></span>` +
+          `<div><p class="hp-tl__title">${esc(i.title)}</p><p class="hp-tl__meta">${esc(i.meta ?? "")}</p></div>` +
+          `<div class="hp-tl__side">${i.chip ? `<span class="hp-chip" data-tone="${i.tone}">${esc(i.chip)}</span>` : ""}</div></li>`,
+      )
+      .join("")}</ol>`;
+  const alertBox = (tone, title, text, toast = false) =>
+    `<div class="hp-alert ${toast ? "hp-toast" : ""}" data-tone="${tone}" role="${tone === "danger" ? "alert" : "status"}"><span class="hp-alert__icon"></span>` +
+    `<div><p class="hp-alert__title">${esc(title)}</p><p class="hp-alert__text">${esc(text)}</p></div></div>`;
+  // One greeting card. art: "tree" | "painting" | "failed" (the last two take an art note).
+  const cardView = ({ art = "tree", note = "", msg = "", to = "", stamp = "", stampTone = "", foot = "" }) =>
+    `<article class="hp-card">${stamp ? `<span class="hp-card__stamp" ${stampTone ? `data-tone="${stampTone}"` : ""}>${esc(stamp)}</span>` : ""}` +
+    (art === "tree" ? `<div class="hp-card__art"><i class="hp-tree"></i></div>` : `<div class="hp-card__art" data-art="${art}"><div class="hp-card__artnote">${note}</div></div>`) +
+    `<div class="hp-card__body">${msg ? `<p class="hp-card__msg">${esc(msg)}</p>` : `<div class="hp-card__line"></div><div class="hp-card__line"></div><div class="hp-card__line"></div>`}` +
+    `${to ? `<p class="hp-card__to">${to}</p>` : ""}</div><div class="hp-card__foot">${foot}</div></article>`;
+
+  // ---- The card's journey, shared by Days 02 and 03: written, painted, delivered ----
+  // A step that runs with the default 4 retries has had 5 tries when it gives up.
+  const DEFAULT_TRIES = 5;
+  function journey(E, { gaveUpAfter = Infinity } = {}) {
+    const llm = where(E, "llm", "writeCard");
+    const image = where(E, "image", "renderImage");
+    const mailOk = where(E, "mail", "sendCard").some((e) => e.ok);
+    const written = llm.some((e) => e.ok);
+    const painted = image.some((e) => e.ok);
+    const tries = image.length;
+    const gaveUp = !painted && tries >= gaveUpAfter;
+    const writeTries = llm.length;
+    const to = where(E, "mail", "sendCard")[0]?.meta?.to ?? "grandma@example.com";
+    const prompt = llm.find((e) => e.meta?.prompt)?.meta.prompt ?? "";
+    return { llm, image, mailOk, written, painted, tries, gaveUp, writeTries, to, prompt };
+  }
+  function journeyCard(j) {
+    const art = j.painted ? { art: "tree" }
+      : j.gaveUp ? { art: "failed", note: `Artwork failed<small>Gave up after ${j.tries} tries</small>` }
+      : { art: "painting", note: `Painting…<small>${j.tries ? `Try ${j.tries + 1}, still trying` : "Try 1"}</small>` };
+    const foot = j.mailOk ? badge("good", "sent", "Sent")
+      : j.gaveUp ? badge("danger", "failed", "Not delivered")
+      : j.tries ? live(badge("warn", "retrying", `Retrying, try ${j.tries + 1}`))
+      : j.written ? live(badge("neutral", "painting", "Painting"))
+      : live(badge("neutral", "writing", "Writing"));
+    return cardView({ ...art, msg: j.prompt, to: `To <b>${esc(j.to)}</b>`, stamp: j.mailOk ? "Sent" : j.gaveUp ? "Not sent" : "", stampTone: j.gaveUp ? "danger" : "", foot });
+  }
+  function journeySteps(j, { checked = false } = {}) {
+    const steps = [];
+    if (checked) steps.push({ state: "done", tone: "good", title: "Prompt checked", meta: "Moderation said yes" });
+    const writeChip = j.writeTries > 1 ? `↻ ${j.writeTries}` : "";
+    steps.push(
+      j.written ? { state: "done", tone: "good", title: "Message written", meta: j.writeTries > 1 ? `Worked on try ${j.writeTries}` : "One call", chip: writeChip }
+      : j.writeTries ? { state: "retrying", tone: "warn", title: "Writing the message", meta: `Try ${j.writeTries + 1} · LLM said 429`, chip: `↻ ${j.writeTries}` }
+      : { state: "active", tone: "neutral", title: "Writing the message", meta: "Working…" },
+    );
+    steps.push(
+      j.painted ? { state: "done", tone: "good", title: "Artwork painted", meta: `Worked on try ${j.tries}`, chip: j.tries > 1 ? `↻ ${j.tries}` : "" }
+      : j.gaveUp ? { state: "failed", tone: "danger", title: "Gave up on the artwork", meta: `After ${j.tries} tries · no card sent`, chip: `↻ ${j.tries}` }
+      : j.tries ? { state: "retrying", tone: "warn", title: "Painting the artwork", meta: `Try ${j.tries + 1} · service busy`, chip: `↻ ${j.tries}` }
+      : { state: j.written ? "active" : "pending", tone: "neutral", title: "Painting the artwork", meta: j.written ? "Try 1" : "Not yet" },
+    );
+    steps.push(
+      j.mailOk ? { state: "done", tone: "good", title: `Delivered to ${j.to}`, meta: "Card sent" }
+      : { state: j.gaveUp ? "skipped" : "pending", tone: "neutral", title: "Delivered", meta: j.gaveUp ? "Skipped, the card never got painted" : "Not yet" },
+    );
+    return steps;
+  }
+
+  // ---- Day 02: a hopeless card, and a retry that waits exactly as told ----
+  function day02(E) {
+    if (!E.length) return null;
+    const notices = where(E, "mail", "notifySender");
+    const rejected = notices.length > 0;
+    const j = journey(E);
+    const llmCalls = j.llm.length;
+
+    let main;
+    if (rejected) {
+      const cardId = notices[0].cardId ?? "c1";
+      const reason = String(notices[0].meta?.reason ?? "");
+      const card = cardView({
+        art: "failed",
+        note: "Rejected<small>No artwork painted</small>",
+        to: `Card <b>${esc(cardId)}</b>`,
+        stamp: "Rejected",
+        stampTone: "danger",
+        foot: badge("danger", "rejected", "Rejected"),
+      });
+      const hero = stat({ label: "LLM calls", value: llmCalls, note: llmCalls ? "billed" : "nothing billed, nothing painted", tone: "good", size: "hp-stat--xl" });
+      const steps = timeline([
+        { state: "failed", tone: "danger", title: "Prompt rejected", meta: reason || "Moderation said no", chip: "No retries" },
+        { state: "done", tone: "good", title: "Sender notified", meta: `Email about card ${cardId}` },
+        { state: "skipped", tone: "neutral", title: "Message and artwork", meta: "Skipped, nothing to bill" },
+      ]);
+      main = `<div class="wall__split">${card}<div class="wall__stack">${hero}${steps}${alertBox("good", "Sender notified", `Email sent about card ${cardId}: ${reason}`, true)}</div></div>`;
+    } else {
+      main = `<div class="wall__split">${journeyCard(j)}<div class="wall__stack">${timeline(journeySteps(j, { checked: j.written }))}</div></div>`;
+    }
+
+    // The 429 beat: one failure, then the retry lands when the provider said it would.
+    const failed = j.llm.filter((e) => !e.ok);
+    let side = "";
+    if (failed.length) {
+      const next = j.llm.find((e) => e.at > failed[0].at);
+      const gap = next ? next.at - failed[0].at : Date.now() - failed[0].at;
+      side =
+        `<div class="hp-stat hp-stat--panel" data-tone="warn"><span class="hp-stat__label">LLM said 429, retry after 5 s</span>` +
+        `<span class="hp-stat__value">${secs(gap)}</span>` +
+        `<p class="hp-stat__note">${next ? `${plural(failed.length, "failure")}, then the retry came <b>${secs(gap)}</b> later` : `${plural(failed.length, "failure")}, waiting to retry…`}</p></div>`;
+    }
+    return {
+      body: `<div class="wall__stack">${main}${side}</div>`,
+      verdict: rejected ? "Rejected at once, sender notified" : j.mailOk ? `Delivered${failed.length ? ` after ${plural(failed.length, "retry")}` : ""}` : "Card in progress",
+    };
+  }
+
+  // ---- Day 03: the image step gives up, or its own function keeps going ----
+  function day03(E, side) {
+    const j = journey(E, { gaveUpAfter: DEFAULT_TRIES });
+    if (!j.llm.length && !j.image.length) return null;
+    const fixed = side === "after";
+    const tone = j.gaveUp ? "danger" : j.painted ? "good" : "warn";
+    const hero = stat({
+      label: "Painting tries",
+      value: j.tries,
+      note: j.gaveUp ? `gave up, <b>never delivered</b>` : j.painted ? `worked on try <b>${j.tries}</b>, card delivered` : "service still failing",
+      tone,
+      size: "hp-stat--xl",
+    });
+    return {
+      body: `<div class="wall__split">${journeyCard(j)}<div class="wall__stack">${hero}${timeline(journeySteps(j))}</div></div>`,
+      verdict: j.gaveUp ? `Gave up after ${j.tries} tries, nothing delivered` : j.mailOk ? `Delivered on try ${j.tries}` : fixed ? `Still retrying, try ${j.tries + 1}` : `Still trying, try ${j.tries + 1}`,
+    };
+  }
+
+  // ---- Day 08: one bill per keystroke, or one for the final text ----
+  function day08(E, side) {
+    const fixed = side === "after";
+    const llm = where(E, "llm", "writeCard").filter((e) => e.ok);
+    const typed = state.edits[side];
+    const waiting = typed.n > llm.length && Date.now() - typed.at < 15000 && !(fixed && llm.length && llm.at(-1).at > typed.at);
+    if (!llm.length && !typed.n) return null;
+    const unit = llm[0]?.costUsd ?? 0;
+    const total = llm.reduce((sum, e) => sum + (e.costUsd ?? 0), 0);
+    const calls = llm.length;
+    const tone = !fixed && calls > 1 ? "danger" : fixed && calls ? "good" : "warn";
+    const skipped = fixed ? Math.max(typed.n - calls, 0) : 0;
+    const ticks = llm.map((e, i) => `<span class="hp-tick" ${i === 0 ? (fixed ? "data-good" : "") : "data-extra"}>${usd(e.costUsd ?? 0)}</span>`);
+    const saved = Array.from({ length: skipped }, () => `<span class="hp-tick" data-saved>${usd(unit)}</span>`);
+    const latest = llm.at(-1)?.meta?.prompt ?? "";
+    const foot = fixed
+      ? waiting ? live(badge("warn", "waiting", "Waiting for quiet")) : calls ? badge("good", "sent", "Preview ready") : live(badge("neutral", "writing", "Writing"))
+      : calls ? badge(calls > 1 ? "danger" : "good", calls > 1 ? "duplicate" : "sent", `Rewritten ${calls}×`) : live(badge("neutral", "writing", "Writing"));
+    const card = cardView({ art: "tree", msg: latest, to: "Preview for <b>c1</b>", foot });
+    const hero = stat({
+      label: "LLM calls",
+      value: calls,
+      unit: "for this text",
+      note: fixed ? (waiting ? `waiting for <b>3 quiet seconds</b>` : calls ? `one call, <b>after the last edit</b>` : "nothing sent yet") : calls > 1 ? `one per edit, should be <b>1</b>` : "one so far",
+      tone,
+      size: "hp-stat--xl",
+    });
+    const meter =
+      `<div class="hp-cost" data-tone="${tone}"><div class="hp-cost__head">` +
+      `<div class="hp-stat"><span class="hp-stat__label">Preview billed</span><span class="hp-cost__total">${usd(total)}</span></div>` +
+      `<span class="hp-chip" data-tone="${tone}">${plural(calls, "call")}</span></div>` +
+      `<div class="hp-cost__ticks">${[...ticks, ...saved].join("") || `<span class="hp-tick" data-saved>—</span>`}</div>` +
+      `<div class="hp-cost__bar" aria-hidden="true"><i style="--pct:${Math.min(100, calls * 12.5)}%"></i></div>` +
+      `<div class="hp-cost__foot">${fixed ? `<span>Only the final text was written</span><span><b>${skipped ? `${usd(unit * skipped)} saved` : "no repeat bills"}</b></span>` : `<span>Every edit <b>started its own run</b></span><span>${usd(unit)} each</span>`}</div></div>`;
+    return {
+      body: `<div class="wall__split">${card}<div class="wall__stack">${hero}${meter}</div></div>`,
+      verdict: fixed ? (calls ? `One preview for the final text, ${usd(total)}` : "Waiting for you to stop typing") : `${plural(calls, "bill")} for one card message, ${usd(total)}`,
+    };
+  }
+
+  // ---- Day 09: one failure re-sends to everyone, or only to the one who failed ----
+  function day09(E, side) {
+    const mail = where(E, "mail", "sendCard");
+    if (!mail.length) return null;
+    const people = new Map();
+    for (const e of mail) {
+      const p = people.get(e.meta?.to) ?? { ok: 0, fail: 0 };
+      e.ok ? p.ok++ : p.fail++;
+      people.set(e.meta?.to, p);
+    }
+    const label = (to) => `#${String(to).replace(/^friend/, "").split("@")[0]}`;
+    const tiles = [...people].map(([to, p]) =>
+      p.ok > 1 ? `<div class="hp-call" data-tone="danger">×${p.ok}<small>${esc(label(to))}</small></div>`
+      : p.ok && p.fail ? `<div class="hp-call" data-tone="warn">↻<small>${esc(label(to))}</small></div>`
+      : p.ok ? `<div class="hp-call" data-tone="good">✓<small>${esc(label(to))}</small></div>`
+      : `<div class="hp-call" data-tone="danger">✕<small>${esc(label(to))}</small></div>`,
+    );
+    const twice = [...people.values()].filter((p) => p.ok > 1).length;
+    const delivered = [...people.values()].filter((p) => p.ok).length;
+    const retried = [...people.values()].filter((p) => p.ok && p.fail).length;
+    const failedAttempts = mail.filter((e) => !e.ok).length;
+    const head =
+      stat({ label: "Got it twice", value: twice, note: twice ? "duplicate deliveries" : "nobody got a repeat", tone: twice ? "danger" : "good", size: "hp-stat--xl" }) +
+      stat({ label: "Delivered", value: delivered, note: `of <b>50</b> people`, tone: "good" }) +
+      stat({ label: "Retried", value: retried, note: failedAttempts ? `${plural(failedAttempts, "failed attempt")}, then delivered` : "no failed attempts", tone: retried ? "warn" : "" }) +
+      stat({ label: "Sends made", value: mail.length, note: "to the mail service" });
+    return {
+      body: `<div class="hp-calls"><div class="hp-calls__head">${head}</div><div class="hp-calls__grid">${tiles.join("")}</div></div>`,
+      verdict: twice ? `${twice} people got the card twice` : delivered >= 50 ? `All ${delivered} delivered once${retried ? `, ${retried} retried` : ""}` : `${delivered} delivered so far, none twice`,
+    };
+  }
+
+  // ---- Day 11: 120 billed writes, or three ----
+  const WRITE_USD = 0.002; // what the on-camera warehouse bills per write
+  function day11(E, side) {
+    const writes = where(E, "warehouse", "insertRows");
+    if (!writes.length) return null;
+    const fixed = side === "after";
+    const rows = writes.reduce((sum, e) => sum + Number(e.meta?.rows ?? 0), 0);
+    const total = writes.length * WRITE_USD;
+    const tone = writes.length > 10 ? "danger" : "good";
+    const ticks = writes.map(() => `<span class="hp-tick" ${fixed ? "data-good" : ""}>${usd(WRITE_USD)}</span>`);
+    const hero = stat({ label: "Warehouse writes", value: writes.length, unit: "billed", note: `${plural(rows, "row")} in ${plural(writes.length, "write")}`, tone, size: "hp-stat--xl" });
+    const meter =
+      `<div class="hp-cost hp-cost--many" data-tone="${tone}"><div class="hp-cost__head">` +
+      `<div class="hp-stat"><span class="hp-stat__label">Warehouse bill</span><span class="hp-cost__total">${usd(total)}</span></div>` +
+      `<span class="hp-chip" data-tone="${tone}">${plural(writes.length, "write")}</span></div>` +
+      `<div class="hp-cost__ticks">${ticks.join("")}</div>` +
+      `<div class="hp-cost__bar" aria-hidden="true"><i style="--pct:${Math.min(100, (writes.length / 120) * 100)}%"></i></div>` +
+      `<div class="hp-cost__foot"><span>${usd(WRITE_USD)} per write, however many rows</span>${fixed && rows > writes.length ? `<span><b>${usd((rows - writes.length) * WRITE_USD)} saved</b></span>` : ""}</div></div>`;
+    const batches = fixed
+      ? `<div class="hp-calls"><div class="hp-calls__grid">${writes
+          .map((e) => `<div class="hp-call hp-call--wide" data-tone="good">×${esc(e.meta?.rows)}<small>${plural(Number(e.meta?.rows), "row")}</small></div>`)
+          .join("")}</div></div>`
+      : "";
+    return {
+      body: `<div class="wall__stack">${hero}${batches}${meter}</div>`,
+      verdict: fixed ? `${plural(rows, "row")} in ${plural(writes.length, "write")}, ${usd(total)}` : `${plural(writes.length, "write")} for ${plural(rows, "row")}, ${usd(total)}`,
+    };
+  }
+
   // ---- Every other day: the ledger as Hearth Post panels ----
   function generic(E) {
     if (!E.length) return null;
@@ -248,18 +492,23 @@
       });
       order = `<div class="hp-stat"><span class="hp-stat__label">Delivery order</span></div><div class="wall__chips">${chips.join("")}</div>`;
     }
-    return { body: `<div class="wall__stack"><div class="wall__grid">${panels.join("")}</div>${order}</div>`, verdict: `${E.length} calls recorded` };
+    return { body: `<div class="wall__stack"><div class="wall__grid">${panels.join("")}</div>${order}</div>`, verdict: `${plural(E.length, "call")} recorded` };
   }
 
   const DAYS = {
+    2: { title: "A hopeless card keeps retrying", sub: "Moderation rejects the Grinch card, and the LLM says 429 once.", before: "pnpm send 02 grinch-before", after: "pnpm send 02 grinch", view: day02 },
+    3: { title: "The image service wears the card out", sub: "It fails 5 times in a row, one more than the default retries allow.", before: "pnpm send 03 very-flaky-image-before", after: "pnpm send 03 very-flaky-image", view: day03 },
     1: { title: "Retries bill the same card again", sub: "A flaky image service made the whole run start over.", before: "pnpm send 01 flaky-image-before", after: "pnpm send 01 flaky-image", view: day01 },
     6: { title: "One customer blocks everyone", sub: "Account a sent 20 cards, then Maisie sent one.", before: "pnpm send 06 noisy-neighbor-before", after: "pnpm send 06 noisy-neighbor", view: day06 },
     7: { title: "The image service says slow down", sub: "15 cards at once, and it allows 5 renders per 10 seconds.", before: "pnpm send 07 burst-before", after: "pnpm send 07 burst", view: day07 },
+    8: { title: "Every keystroke gets billed", sub: "Eight edits in about two seconds, all to one card message.", before: "pnpm send 08 typing-burst-before", after: "pnpm send 08 typing-burst", view: day08 },
+    9: { title: "One failure sends to everyone again", sub: "50 recipients, and delivery 25 fails once.", before: "pnpm send 09 bulk-50-before", after: "pnpm send 09 bulk-50", view: day09 },
+    11: { title: "120 writes that could be three", sub: "120 card opens in two seconds, and the warehouse bills per write.", before: "pnpm send 11 opens-120-before", after: "pnpm send 11 opens-120", view: day11 },
   };
 
   // Auto mode follows the run that started most recently: the side of the newest card/side pair
 // seen. Retries trickling in from an older run (Day 07 backoff) never flip the view.
-const state = { day: 0, config: null, mode: "auto", auto: "before", seen: new Set(), ledger: [], sig: "", sent: 0 };
+const state = { day: 0, config: null, mode: "auto", auto: "before", seen: new Set(), ledger: [], sig: "", sent: 0, edits: { before: { n: 0, at: 0 }, after: { n: 0, at: 0 } } };
 
   const sides = (ledger) => ({ before: ledger.filter(isBefore), after: ledger.filter((e) => !isBefore(e)) });
   function shownSides(ledger) {
@@ -337,13 +586,24 @@ const state = { day: 0, config: null, mode: "auto", auto: "before", seen: new Se
         field.className = "hp-field";
         const id = `field-${i}`;
         field.innerHTML = `<label for="${id}">${esc(action.label)}</label><input class="hp-input" id="${id}" placeholder="Start typing…" autocomplete="off" />`;
-        field.querySelector("input").oninput = (ev) => sendEvent(action.event, { ...action.data, [action.field]: ev.target.value });
+        field.querySelector("input").oninput = (ev) => sendEvent(action.event, { ...action.data, [action.field]: ev.target.value }, true);
         bar.insertBefore(field, anchor);
       }
     });
   }
 
-  async function sendEvent(name, data) {
+  // The ledger can't see keystrokes that are still waiting out a debounce, so the page counts the ones it sends.
+  function noteEdit(name) {
+    const side = name.endsWith(".before") ? "before" : "after";
+    state.edits[side] = { n: state.edits[side].n + 1, at: Date.now() };
+    state.auto = side;
+  }
+
+  async function sendEvent(name, data, typed = false) {
+    if (typed) {
+      noteEdit(name);
+      render();
+    }
     await fetch("/__event", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, data }) });
     state.sent++;
     document.getElementById("sent").textContent = `${state.sent} event${state.sent === 1 ? "" : "s"} sent`;
@@ -386,6 +646,7 @@ const state = { day: 0, config: null, mode: "auto", auto: "before", seen: new Se
     state.mode = "auto";
     state.ledger = [];
     state.sig = "";
+    state.edits = { before: { n: 0, at: 0 }, after: { n: 0, at: 0 } };
     document.getElementById("sent").textContent = "";
     render();
   };

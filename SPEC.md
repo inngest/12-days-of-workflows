@@ -235,11 +235,16 @@ export function startServer(opts: {
 - **`fn` ledger field.** `LedgerEntry` gains `fn?: string`, the id of the function whose run made the call (the chaos middleware stores it in `AsyncLocalStorage` next to `cardId`; `record()` stamps it). Entries whose `fn` ends in `-before` are the Broken run, everything else is Fixed. Existing fields and the fake log-line format are unchanged.
 - **`GET /__wall`** returns `{ appId, title, actions }`. The title is the day's README heading (the app runs from its day folder), and the level comes from the day number.
 - **Every screen** has a DayHeader (level color, plain-language title, Broken or Fixed badge), a Before / After / Side by side switch, the day's wall actions, and Reset. Auto mode shows the run that started most recently; the switch pins a side. Each side ends in a one-line verdict, and nothing relies on colour alone (glyphs, hatching, words).
-- **Bespoke screens, Days 01, 06 and 07.**
+- **Bespoke screens, Days 01, 02, 03, 06, 07, 08, 09 and 11.**
   - Day 01: card preview plus "LLM billed N×", with a cost meter. Broken: 3× with hatched repeat bills. Fixed: 1× and dashed "saved" ticks.
   - Day 06: Maisie's queue spot (`b1`'s delivery position, of 21), grouped account rows and lanes. Broken: about #21. Fixed: about #3.
   - Day 07: a grid of image calls with a big "Rate limited" count. Broken: a wall of 429 tiles. Fixed: all ✓, 0.
-- **Every other day** falls back to a generic Hearth Post view: counts for LLM calls, image renders, cards sent and warehouse writes as stat panels, plus the delivery order as chips (duplicates and failures flagged). The same Before / After split applies.
+  - Day 02: card preview, a Timeline and an LLM-calls stat. Fixed (`grinch`): Rejected stamp, "No retries" on the failed moderation step, a "Sender notified" toast, 0 LLM calls. A small secondary panel shows the `llm-429` beat: the gap between the failed call and its retry (about 5 s). Broken: the `-before` run makes no ledger calls, so this side stays on its empty state (see BUILD_LOG).
+  - Day 03: card preview, a "Painting tries" stat and a Timeline. Broken: 5 tries, "Gave up on the artwork", card art hatched, nothing delivered. Fixed: the separate function keeps going, the 6th try paints, the card is Sent.
+  - Day 08: card preview, "LLM calls" stat and a cost meter, one tick per billed call. Broken: 8 ticks. Fixed: "Waiting for quiet" while the wall's own text box is being typed into (the page counts the edits it sends, since the ledger can't see debounced ones), then one tick, with dashed "saved" ticks for the edits it skipped.
+  - Day 09: a call grid of recipients in order of arrival, with "Got it twice", "Delivered", "Retried" and "Sends made" stats. Broken: 24 hatched ×2 tiles. Fixed: 50 ✓ and one ↻.
+  - Day 11: "Warehouse writes" stat plus a cost meter, one small tick per write at a flat $0.002 (a constant in the page, since the warehouse ledger entry carries rows, not dollars). Broken: 120 ticks, $0.240. Fixed: three wide batch tiles (×50, ×50, ×20), $0.006.
+- **Every other day** (04, 05, 10, 12 and 12b) falls back to a generic Hearth Post view: counts for LLM calls, image renders, cards sent and warehouse writes as stat panels, plus the delivery order as chips (duplicates and failures flagged). The same Before / After split applies.
 - **Reset** calls `DELETE /__ledger`, so presenters can clear the wall between "break it" and "fix it".
 - **`POST /__event`** sends `{ name, data }` through the day's own client, accepting only event names listed in `wall.actions`. Actions render as buttons or text boxes beside the switch.
 - **Actions, three days only**, where a person is the trigger:
