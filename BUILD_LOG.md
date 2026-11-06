@@ -107,3 +107,14 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Names that mislead on screen got renamed. An invoke-only trigger called `imageRequested` looked like an event that didn't exist, so it's now `invokedWithText`. Day 09's imperative `card/deliver` became `card/delivery.requested`, and its function is now `send-to-everyone`, the same as the episode's title.
 - Day 12's scorer dropped a hand-built CEL string for `match: "data.cardId"`, the same pattern Day 04 already taught. It worked on the deferred trigger first try, and the lesson got four lines shorter.
 - Two episodes were each trying to teach three things. Day 02 now leads with "fail fast and tell the sender", and Day 05 with "sleep until the date, unless it's deleted". Retry-after and the nightly cron are now short "one more" beats at the end. No code was removed.
+
+## Day 12 Cut B
+
+- The Notion spec added a second take on Day 12: a card-designer agent that writes each card as code and runs it in a sandbox. The pitch is "the agent is the brain, the sandbox is the hands, and durable execution keeps score", so the day is the experiment from Day 12 with a sandbox in the middle.
+- We kept the agent's output as small as possible: a Node program that prints an SVG. The sandbox runs it with `node -e`, so there's no headless browser and no new dependency, and the finished card is just text in the run's output.
+- The new fake, `designCard()`, breaks the first design for some cards by misspelling one variable, so Node exits with a `ReferenceError` the agent can read. The break is rolled once per card, and "bold" breaks more often than "classic", so the render score really does differ by variant. Card c1 breaks in both, which makes the revision beat reliable on camera.
+- A sandbox failure is data, not an exception: `commands.run` returns the exit code and stderr. That made the revision a plain `if`, and we kept it to one retry on purpose.
+- The SDK nudged us twice. `step.score()` has no experiment option, so crediting a score to a variant uses `inngest.score.experiment()` at the function body. And creating a sandbox requires CPU and memory, which cost three lines of the budget.
+- The Day 12 scorer moved out of the lesson markers, since it's the same one viewers already saw. That left the new lesson at 32 of 35 lines.
+- We can't test any of the sandbox calls here. They're an open beta on Cloud, and the local Dev Server only runs them after `inngest login`. So `pnpm check` prints SKIP for this day, still checks the lesson budget and types, and the README says what to run after logging in.
+- The scripts assumed two-digit day folders and port 3000 + NN. They now accept `12b` and map it to port 3112, so it never clashes with Day 12.

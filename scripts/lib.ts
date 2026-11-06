@@ -13,17 +13,21 @@ export const DEV_SERVER = "http://localhost:8288";
  * reference an SDK type that isn't exported, so a composite (declaration-emitting) build can't
  * name them.
  */
-export const NO_EMIT_PROJECTS = ["days/12-measure-what-works"];
+export const NO_EMIT_PROJECTS = ["days/12-measure-what-works", "days/12b-design-agent"];
 
 export type Day = { nn: string; dir: string; port: number };
 
+/** Folders look like `01-survive-failure` or `12b-design-agent`. */
 export function listDays(): string[] {
   return readdirSync(join(ROOT, "days"))
-    .filter((name) => /^\d\d-/.test(name))
+    .filter((name) => /^\d\d[a-z]?-/.test(name))
     .sort();
 }
 
-/** Resolves "1" or "01" to its `days/01-*` folder, or exits listing the days that exist. */
+/** "12b-design-agent" → "12b". */
+export const dayId = (folder: string) => folder.split("-")[0];
+
+/** Resolves "1", "01" or "12b" to its `days/01-*` folder, or exits listing the days that exist. */
 export function resolveDay(input: string): Day {
   const nn = input.padStart(2, "0");
   const matches = listDays().filter((name) => name.startsWith(`${nn}-`));
@@ -31,7 +35,9 @@ export function resolveDay(input: string): Day {
     console.error(`No single day matches "${input}". Days:\n  ${listDays().join("\n  ")}`);
     process.exit(1);
   }
-  return { nn, dir: join(ROOT, "days", matches[0]), port: 3000 + Number(nn) };
+  // Day 12b runs on 3112, so it never clashes with Day 12 on 3012.
+  const port = 3000 + Number.parseInt(nn, 10) + (/[a-z]$/.test(nn) ? 100 : 0);
+  return { nn, dir: join(ROOT, "days", matches[0]), port };
 }
 
 /** Spawns a process in its own group, prefixing each output line with `[label]`. */
@@ -121,7 +127,11 @@ export async function waitFor(what: string, ready: () => Promise<boolean>, timeo
   throw new Error(`Timed out after ${timeoutMs} ms waiting for ${what}`);
 }
 
-export type DayModule = { lessonBudget: number; scenarios: Record<string, Scenario> };
+export type DayModule = {
+  lessonBudget: number;
+  scenarios: Record<string, Scenario>;
+  requiresCloudSandboxes?: boolean; // `pnpm check` skips the scenarios of days that set this
+};
 
 /** Imports a day's client and its `send.ts`. Callers set INNGEST_DEV=1 first. */
 export async function loadDay(day: Day): Promise<{ inngest: Inngest; mod: DayModule }> {

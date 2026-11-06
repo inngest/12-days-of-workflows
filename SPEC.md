@@ -790,6 +790,19 @@ export const functions = [createCard, reactionScorer];
 
 Verify: the full `group.experiment()`, `defer()` and `createScorer()` signatures against the [Agent Evals reference](https://www.inngest.com/docs/agent-evals/reference.md). The starter's stub leaves `variant` undefined; fix with a second stub line if the return breaks typecheck.
 
+### Day 12b — `12b-design-agent` (budget 35)
+
+Problem: an AI agent designs each card as code, and that code has to run somewhere safe. Cut B of Day 12; folder `12b-design-agent`, port 3112 (`pnpm day 12b`).
+
+| Scenario | Env | Sends | Expect |
+| --- | --- | --- | --- |
+| `design-1` | `REACTION_TTL=60s` | card c1, whose first design always breaks | `designCard` called twice (design + revision), one delivery |
+| `design-12` | `REACTION_TTL=60s` | 12 cards, then one `card/reacted` per card | 12 `score-recipient-reaction` runs Completed, 12 deliveries |
+
+The agent is the shared fake `designCard()` (seeded per card and variant; "bold" breaks more often than "classic"). It returns a Node program that prints the card as SVG; the sandbox runs it with `node -e`, no browser. Uses `sandboxMiddleware()` and `scoreMiddleware()` from `inngest/experimental` (`inngest@^4.21.1`) and `step.sandbox.create`, `sandbox.commands.run` and `sandbox.destroy`. `step.score()` has no `experiment` option, so the render score is `inngest.score.experiment()`.
+
+Sandboxes are an open beta on Inngest Cloud (Pro and up); the local Dev Server only uses them after `inngest login`. The day exports `requiresCloudSandboxes = true` from `send.ts`, and `pnpm check` prints SKIP for its scenarios while still running the lesson-budget check and the typecheck (`NO_EMIT_PROJECTS`, like Day 12). The scenarios' `expect` blocks are untested until run with a login.
+
 ## Build order
 
 Six phases, one Claude Code session each. A phase is done only when its gate command passes; report failures instead of working around them.
@@ -844,6 +857,8 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
   | 02 | 9 / 25 | 06 | 1 / 5 | 10 | 1 / 5 |
   | 03 | 9 / 15 | 07 | 1 / 5 | 11 | 8 / 10 |
   | 04 | 9 / 15 | 08 | 1 / 5 | 12 | 32 / 35 |
+
+**Day 12 Cut B.** `12b-design-agent` is built on top of Phase 5 (Cloud sandboxes, so it is checked statically only; see "Day 12b" above).
 
 **Readability sweep (after Phase 5).** Reference code above is the original target shape. The days have since been simplified for the screen: `sendCard(event.data)`, Day 04 has a `before.ts` and an `approve-before` scenario with a 15 s TTL, Day 05's event is `card/scheduled`, Day 07 throttles at 4 per 10 s, Day 09 uses `card/delivery.requested` and `send-to-everyone`, Days 03/07 call the invoke trigger `invokedWithText`, and Day 12's scorer uses `match`. The code and READMEs are the source of truth; BUILD_LOG has the reasons.
 

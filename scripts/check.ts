@@ -7,6 +7,7 @@ import {
   countLessonLines,
   type Day,
   DEV_SERVER,
+  dayId,
   LESSON_FILES,
   listDays,
   loadDay,
@@ -328,6 +329,11 @@ async function checkDay(day: Day): Promise<boolean> {
   console.log(`${overBudget ? "FAIL" : "PASS"} ${day.nn} lesson-budget ${budget}`);
   if (overBudget) ok = false;
 
+  if (mod.requiresCloudSandboxes) {
+    console.log(`SKIP ${day.nn} needs Inngest Cloud sandboxes (run with inngest login)`);
+    return ok;
+  }
+
   const harness = new DayHarness(day, inngest.id);
   const onSigint = async () => {
     await harness.stop();
@@ -360,7 +366,7 @@ async function checkDay(day: Day): Promise<boolean> {
 }
 
 const selected = process.argv.slice(2);
-const days = (selected.length ? selected : listDays().map((d) => d.slice(0, 2))).map(resolveDay);
+const days = (selected.length ? selected : listDays().map(dayId)).map(resolveDay);
 
 runStep("tsc -b", join(ROOT, "node_modules/.bin/tsc"), ["-b"]);
 for (const project of NO_EMIT_PROJECTS) {

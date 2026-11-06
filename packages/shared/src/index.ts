@@ -1,5 +1,6 @@
 export { type Chaos, type ChaosSpec, chaosMiddleware } from "./chaos.js";
 export { ProviderError } from "./errors.js";
+export { type DesignCardInput, designCard } from "./fakes/design.js";
 export { drafts } from "./fakes/drafts.js";
 export { renderImage } from "./fakes/image.js";
 export { type CardText, type WriteCardInput, writeCard } from "./fakes/llm.js";
