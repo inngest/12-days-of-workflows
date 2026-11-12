@@ -1,5 +1,14 @@
 import type { ChildProcess } from "node:child_process";
-import { dayId, listDays, requireEnv, resolveDay, startApp, startDevServer, stop } from "./lib.js";
+import {
+  dayId,
+  listDays,
+  requireEnv,
+  resolveDay,
+  sharedScenarioEnv,
+  startApp,
+  startDevServer,
+  stop,
+} from "./lib.js";
 
 // Usage: pnpm day NN [--cloud]   (or: pnpm day all)
 // --cloud skips the Dev Server and connects the app to Inngest Cloud instead.
@@ -12,7 +21,9 @@ if (!arg || (cloud && arg === "all")) {
 if (cloud) requireEnv(["INNGEST_SIGNING_KEY", "INNGEST_EVENT_KEY"]);
 
 const days = arg === "all" ? listDays().map((name) => resolveDay(dayId(name))) : [resolveDay(arg)];
-const children: ChildProcess[] = days.map((day) => startApp(day, { watch: true, cloud }));
+const children: ChildProcess[] = await Promise.all(
+  days.map(async (day) => startApp(day, { watch: true, cloud, env: await sharedScenarioEnv(day) })),
+);
 if (cloud) {
   console.log("Cloud mode: watch runs at https://app.inngest.com (no local Dev Server).");
 } else {
