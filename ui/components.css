@@ -1,0 +1,902 @@
+/* Components. Needs tokens.css first. */
+
+* {
+  box-sizing: border-box;
+}
+
+/* Everything is in rem, so on a big (recorded) screen one number scales the kit. */
+@media (min-width: 1600px) {
+  html {
+    font-size: 125%;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--text-body) / 1.6 var(--font-body);
+}
+
+/* Layout */
+.page {
+  max-width: var(--width-page);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-3);
+}
+.stack > * + * {
+  margin-top: var(--space-3);
+}
+.stack-lg > * + * {
+  margin-top: var(--space-5);
+}
+.row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Headings */
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--evergreen);
+}
+h1 {
+  font-size: var(--text-h1);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: var(--text-h3);
+}
+h2 {
+  font-size: var(--text-h2);
+}
+.lede {
+  max-width: var(--width-text);
+  color: var(--ink-soft);
+}
+.muted {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+.rule {
+  border: 0;
+  border-top: 1px solid var(--brass);
+  width: 4rem;
+  margin: var(--space-3) 0 0;
+}
+
+/* Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+/* Buttons */
+.button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--evergreen);
+  background: var(--evergreen);
+  color: var(--surface);
+  cursor: pointer;
+}
+.button:hover {
+  background: #17382c;
+}
+.button.coral {
+  background: var(--coral);
+  border-color: var(--coral);
+  color: var(--ink);
+}
+.button.coral:hover {
+  background: #ff9c88;
+}
+.button.quiet {
+  background: transparent;
+  color: var(--evergreen);
+}
+.button.quiet:hover {
+  background: rgb(31 74 58 / 0.08);
+}
+.button:focus-visible,
+.field input:focus-visible,
+.field textarea:focus-visible,
+.field select:focus-visible,
+.switch-option:focus-visible {
+  outline: 3px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* Form field */
+.field {
+  display: block;
+}
+.field > span {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  font: inherit;
+  padding: 0.7rem 0.9rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--ink-soft);
+  border-radius: var(--radius);
+}
+
+/* Steps: one workflow step per row. Set data-status on each <li>. */
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.step {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr auto;
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+}
+.step:last-child {
+  border-bottom: 0;
+}
+.step::before {
+  content: "";
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  border: 2px solid var(--ink-soft);
+  align-self: center;
+}
+.step-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+}
+.step-status {
+  font-size: var(--text-body);
+  color: var(--ink-soft);
+}
+
+.step[data-status="pending"] {
+  color: var(--ink-soft);
+}
+.step[data-status="running"]::before {
+  border-color: var(--evergreen);
+  border-width: 4px;
+  background: var(--surface);
+}
+.step[data-status="running"] .step-status {
+  color: var(--evergreen);
+  font-weight: 600;
+}
+.step[data-status="done"]::before {
+  border-color: var(--evergreen);
+  background: var(--evergreen);
+}
+.step[data-status="done"] .step-status {
+  color: var(--evergreen);
+}
+.step[data-status="retrying"]::before {
+  border-color: var(--brass);
+  background: var(--brass);
+}
+.step[data-status="retrying"] .step-status {
+  color: var(--brass);
+  font-weight: 600;
+}
+.step[data-status="failed"]::before {
+  border-color: var(--cranberry);
+  background: var(--cranberry);
+}
+.step[data-status="failed"] .step-name,
+.step[data-status="failed"] .step-status {
+  color: var(--cranberry);
+  font-weight: 600;
+}
+
+/* Event feed: newest line on top, a quiet left border per line. */
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+}
+.feed li {
+  padding: 0.4rem 0 0.4rem var(--space-2);
+  border-left: 3px solid var(--line);
+}
+.feed li + li {
+  margin-top: 0.25rem;
+}
+.feed .time {
+  color: var(--ink-soft);
+  margin-right: var(--space-2);
+}
+.feed .ok {
+  border-left-color: var(--evergreen);
+}
+.feed .warn {
+  border-left-color: var(--brass);
+}
+.feed .error {
+  border-left-color: var(--cranberry);
+  color: var(--cranberry);
+}
+
+/* Holiday card: what the whole series ends up sending. */
+.holiday-card {
+  max-width: 30rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 6px solid var(--coral);
+  border-radius: var(--radius);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+}
+.holiday-card-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  line-height: 1.25;
+  color: var(--evergreen);
+  margin: 0;
+}
+.holiday-card-message {
+  font-family: var(--font-heading);
+  font-style: italic;
+  margin: var(--space-3) 0;
+}
+.holiday-card-from {
+  color: var(--brass);
+  font-weight: 600;
+  margin: 0;
+}
+.holiday-card .rule {
+  margin: var(--space-3) auto 0;
+}
+
+/* ---------- Signature pieces ---------- */
+
+/* Masthead: the dark evergreen band at the top of a page. Holds string lights and the brand. */
+.masthead {
+  background: var(--night);
+  color: var(--night-ink);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+.masthead-inner {
+  max-width: var(--width-dash);
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+.brand {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.brand small {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
+  font-weight: 400;
+  color: var(--night-soft);
+}
+
+/* String lights: bulbs alternate lime and coral on a drooping wire. Decoration only.
+   <div class="string-lights" aria-hidden="true"><span class="bulb"><b>R</b></span> ... */
+.string-lights {
+  display: flex;
+  padding: 0 var(--space-3);
+  margin: 0 calc(var(--space-3) * -1) var(--space-2);
+  overflow: hidden;
+  --wire: var(--night-line);
+}
+.bulb {
+  position: relative;
+  flex: 1;
+  height: 3.4rem;
+}
+.bulb::before {
+  content: "";
+  position: absolute;
+  inset: 0.25rem 0 auto;
+  height: 0.9rem;
+  border-bottom: 2px solid var(--wire);
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+}
+.bulb b {
+  position: absolute;
+  top: 0.55rem;
+  left: 0;
+  transform: translateX(-50%);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--lime);
+  color: var(--night);
+  font: 700 0.9rem / 1 var(--font-mono);
+}
+.bulb b::before {
+  content: "";
+  position: absolute;
+  top: -0.3rem;
+  width: 0.6rem;
+  height: 0.45rem;
+  background: var(--wire);
+  border-radius: 2px;
+}
+.bulb:nth-child(even) b {
+  background: var(--coral);
+}
+.bulb:last-child {
+  flex: 0 0 0;
+}
+.bulb:last-child::before {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bulb b {
+    animation: twinkle 5s ease-in-out infinite;
+  }
+  .bulb:nth-child(even) b {
+    animation-delay: 2.5s;
+  }
+}
+@keyframes twinkle {
+  50% {
+    opacity: 0.75;
+  }
+}
+
+/* Stamp: an outlined rectangular tag, a little crooked. Use sparingly. */
+.stamp {
+  display: inline-block;
+  padding: 0.2rem 0.7rem;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  font: 600 var(--text-small) / 1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--evergreen);
+  transform: rotate(-1.5deg);
+}
+.stamp.coral {
+  color: var(--coral-deep);
+  transform: rotate(1deg);
+}
+.masthead .stamp {
+  color: var(--coral);
+}
+.masthead .stamp.lime {
+  color: var(--lime);
+}
+
+/* Trace: the dark "run trace" card. Rows set data-status:
+   done, running, queued, waiting, retrying, failed.
+   Bars are placed with style="--at: 20%; --len: 30%". */
+.trace {
+  container-type: inline-size;
+  background: var(--night);
+  color: var(--night-ink);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+.trace.tilt {
+  transform: rotate(-1.2deg);
+}
+.trace-head,
+.trace-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.trace-head {
+  margin-bottom: var(--space-2);
+}
+.trace-state {
+  color: var(--lime);
+}
+.trace-state::before {
+  content: "";
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: var(--lime);
+}
+.trace-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.trace-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr 3rem auto;
+  gap: var(--space-1);
+  align-items: center;
+  padding: 0.55rem 0;
+}
+.trace-no {
+  color: var(--night-soft);
+}
+.trace-time {
+  text-align: right;
+  color: var(--night-soft);
+}
+.trace-bar {
+  position: relative;
+  height: 1rem;
+}
+.trace-bar i {
+  position: absolute;
+  left: 0;
+  top: 0.05rem;
+  width: 100%;
+  height: 0.85rem;
+  border-radius: 3px;
+  border: 2px solid var(--night-soft);
+  opacity: 0.6;
+}
+.trace-row[data-status="done"] .trace-bar i {
+  background: var(--lime);
+  border-color: var(--lime);
+  opacity: 1;
+}
+.trace-row[data-status="running"] {
+  color: var(--lime);
+}
+.trace-row[data-status="running"] .trace-bar i {
+  border: 2px dashed var(--lime);
+  opacity: 1;
+}
+.trace-row[data-status="running"] .trace-time {
+  color: var(--lime);
+}
+.trace-row[data-status="queued"] .trace-name {
+  color: var(--night-soft);
+}
+.trace-row[data-status="queued"] .trace-bar i {
+  border-style: dashed;
+}
+.trace-row[data-status="waiting"],
+.trace-row[data-status="retrying"] {
+  color: var(--coral);
+}
+.trace-row[data-status="waiting"] .trace-bar i,
+.trace-row[data-status="retrying"] .trace-bar i {
+  border: 2px dashed var(--coral);
+  opacity: 1;
+}
+.trace-row[data-status="waiting"] .trace-time,
+.trace-row[data-status="retrying"] .trace-time {
+  color: var(--coral);
+}
+.trace-row[data-status="failed"] {
+  color: var(--coral);
+  font-weight: 700;
+}
+.trace-row[data-status="failed"] .trace-bar i {
+  background: var(--coral);
+  border-color: var(--coral);
+  opacity: 1;
+}
+.trace-row[data-status="failed"] .trace-time {
+  color: var(--coral);
+}
+.trace-foot {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--night-line);
+  color: var(--night-soft);
+}
+/* Wide trace (more than 36rem): the bar becomes a little waterfall. */
+@container (min-width: 36rem) {
+  .trace-row {
+    grid-template-columns: 2rem 13rem 1fr 7rem;
+  }
+  .trace-bar i {
+    left: var(--at, 0%);
+    width: var(--len, 10%);
+    min-width: 0.9rem;
+  }
+}
+@container (max-width: 35.99rem) {
+  .trace-bar i {
+    width: 2.5rem;
+  }
+}
+
+/* Status feed: what the person sending the card sees. One calm line each.
+   Set data-status: done, running, pending, retrying, failed. */
+.status-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-large);
+}
+.status-feed li {
+  position: relative;
+  padding: 0.45rem 0 0.45rem 2.25rem;
+  color: var(--ink-soft);
+}
+.status-feed li::before {
+  content: "";
+  position: absolute;
+  left: 0.3rem;
+  top: 50%;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: -0.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+}
+.status-feed li[data-status="done"] {
+  color: var(--ink);
+}
+.status-feed li[data-status="done"]::before {
+  /* a quiet check mark */
+  border: 0;
+  border-radius: 0;
+  width: 0.45rem;
+  height: 0.85rem;
+  margin-top: -0.6rem;
+  left: 0.45rem;
+  border-right: 3px solid var(--evergreen);
+  border-bottom: 3px solid var(--evergreen);
+  transform: rotate(40deg);
+}
+.status-feed li[data-status="running"] {
+  color: var(--evergreen);
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 600;
+  padding-block: 0.6rem;
+}
+.status-feed li[data-status="running"]::before {
+  border: 4px solid var(--evergreen);
+  background: var(--lime);
+}
+.status-feed li[data-status="retrying"] {
+  color: var(--brass);
+}
+.status-feed li[data-status="retrying"]::before {
+  border-color: var(--brass);
+  background: var(--brass);
+}
+.status-feed li[data-status="failed"] {
+  color: var(--cranberry);
+  font-weight: 600;
+}
+.status-feed li[data-status="failed"]::before {
+  border-color: var(--cranberry);
+  background: var(--cranberry);
+}
+
+/* Send card: the order form. A card with a coral ribbon on top. */
+.send-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 6px solid var(--coral);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+.send-card .field select {
+  appearance: auto;
+}
+.hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: var(--text-small);
+  color: var(--ink-soft);
+}
+
+/* Switch: two big tabs, The problem / The fix. Mark the chosen one with aria-pressed="true". */
+.switch {
+  display: inline-flex;
+  border: 2px solid var(--evergreen);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.switch-option {
+  font: inherit;
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  font-weight: 600;
+  padding: 0.7rem 1.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--evergreen);
+  cursor: pointer;
+}
+.switch-option + .switch-option {
+  border-left: 2px solid var(--evergreen);
+}
+.switch-option:hover {
+  background: rgb(31 74 58 / 0.08);
+}
+.switch-option[aria-pressed="true"] {
+  background: var(--evergreen);
+  color: var(--surface);
+}
+.switch-option[aria-pressed="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.6rem;
+  border-radius: 50%;
+  background: var(--lime);
+}
+.switch-option:focus-visible {
+  outline-offset: -6px;
+}
+
+/* On the dark masthead the switch flips to light colors. */
+.masthead .switch,
+.masthead .switch-option + .switch-option {
+  border-color: var(--night-soft);
+}
+.masthead .switch-option {
+  color: var(--night-ink);
+}
+.masthead .switch-option:hover {
+  background: var(--night-raised);
+}
+.masthead .switch-option[aria-pressed="true"] {
+  background: var(--night-ink);
+  color: var(--night);
+}
+.masthead .switch-option[aria-pressed="true"]::before {
+  background: var(--evergreen);
+}
+
+/* Compare: problem and fix side by side. Each side holds a few ledger numbers.
+   <div class="compare"><section class="compare-side" data-side="problem"> ... */
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.compare-side {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+.compare-side > h3 {
+  margin-bottom: var(--space-2);
+}
+.compare-side[data-side="problem"] {
+  border-top: 6px solid var(--cranberry);
+}
+.compare-side[data-side="fix"] {
+  border-top: 6px solid var(--lime);
+}
+.compare-side dl {
+  margin: 0;
+}
+.compare-side dl > div + div {
+  margin-top: var(--space-2);
+}
+.compare-side dd {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-h2);
+  line-height: 1.2;
+  font-weight: 600;
+}
+.compare-side dt {
+  order: 2;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+.compare-side dl > div {
+  display: flex;
+  flex-direction: column;
+}
+.compare-side[data-side="problem"] dd {
+  color: var(--cranberry);
+}
+.compare-side[data-side="fix"] dd {
+  color: var(--evergreen);
+}
+.compare-empty {
+  color: var(--ink-soft);
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  text-align: center;
+}
+@media (max-width: 40rem) {
+  .compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Compare strip: the same two sides as one slim row pinned to the bottom of the screen,
+   so the payoff is always visible. <div class="compare strip"> with the same .compare-side markup.
+   Give the page bottom padding (see .dashboard-page below) so nothing hides behind it. */
+.compare.strip {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 10;
+  gap: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.strip .compare-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 5.5rem;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: 0;
+  border-top: 4px solid var(--line);
+  background: transparent;
+}
+.strip .compare-side + .compare-side {
+  border-left: 1px solid var(--line);
+}
+.strip .compare-side[data-side="problem"] {
+  border-top-color: var(--cranberry);
+}
+.strip .compare-side[data-side="fix"] {
+  border-top-color: var(--lime);
+}
+.strip .compare-side h3 {
+  flex: none;
+  margin: 0;
+  font-size: var(--text-body);
+}
+.strip .compare-side dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+.strip .compare-side dl > div + div {
+  margin-top: 0;
+}
+.strip .compare-side dd {
+  font-size: var(--text-h3);
+  line-height: 1.2;
+}
+.strip .compare-side dt {
+  font-size: var(--text-small);
+  line-height: 1.3;
+}
+.strip .compare-empty {
+  margin: 0;
+  padding: 0.4rem var(--space-2);
+  border-width: 1px;
+}
+/* The title can carry one short note under it ("Cut short"): wrap them in .compare-name. */
+.compare-name {
+  flex: none;
+}
+.compare-name > h3 {
+  margin: 0;
+}
+.compare-name > .compare-note {
+  display: block;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.3;
+}
+/* The half the switch points at is a touch warmer; the other stays calm. */
+.strip .compare-side[data-active="true"] {
+  background: var(--paper);
+}
+.strip .compare-side[data-active="true"] h3 {
+  color: var(--evergreen);
+}
+@media (max-width: 40rem) {
+  .compare.strip {
+    grid-template-columns: 1fr;
+  }
+  .strip .compare-side {
+    min-height: 0;
+  }
+  .strip .compare-side + .compare-side {
+    border-left: 0;
+  }
+}
+
+/* Scene: a flat, cozy hearth in color blocks. Drop the SVG from the specimen into .scene.
+   Also the empty state: .empty = scene + a line or two. */
+.scene svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+.scene .s-wall {
+  fill: var(--evergreen);
+}
+.scene .s-floor {
+  fill: var(--coral);
+}
+.scene .s-paper {
+  fill: var(--paper);
+}
+.scene .s-night {
+  fill: var(--night);
+}
+.scene .s-yellow {
+  fill: var(--yellow);
+}
+.scene .s-coral {
+  fill: var(--coral);
+}
+.scene .s-leaf {
+  fill: var(--leaf);
+}
+.scene .s-stroke {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+.empty {
+  max-width: 26rem;
+  text-align: center;
+}
+.empty .scene {
+  margin-bottom: var(--space-3);
+}
+
+/* Dashboard: the product screen. Send on the left, the live card in the middle, the trace on the right. */
+.dashboard-page {
+  max-width: var(--width-dash);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-3) var(--space-5);
+}
+.dashboard-page:has(.compare.strip:not([hidden])) {
+  padding-bottom: 9rem; /* scroll clear of the fixed strip */
+}
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(17rem, 21rem) minmax(0, 1fr) minmax(19rem, 26rem);
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (max-width: 64rem) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+}
+.holiday-card .scene {
+  margin-bottom: var(--space-3);
+}
