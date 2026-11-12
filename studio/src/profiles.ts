@@ -1,3 +1,5 @@
+import type { QueueRule } from "./queue.js";
+
 // One entry per day: which events the form fires, which fields it shows, and what the
 // dashboard follows. Adding a day means adding a block here, nothing else.
 
@@ -90,6 +92,8 @@ export const FIELDS: Record<Exclude<FieldId, "trouble">, Field> = {
 };
 
 export type Profile = {
+  /** Days about a queue (06, 10): the studio draws who is being served and who waits. */
+  queue?: QueueRule;
   event: string; // what "The fix" sends
   fields: FieldId[];
   defaults: Partial<Record<FieldId, string>>;
@@ -213,6 +217,13 @@ export const PROFILES: Record<string, Profile> = {
     main: ["create-card"],
     plan: ["write-text", "render-image", "deliver"],
     flow: { name: "concurrency key", detail: "2 at a time per account" },
+    queue: {
+      by: "account",
+      slots: { fix: 2, problem: 5 },
+      lanes: "per-group",
+      jumps: false,
+      names: { a: "Acme Greetings", b: "Brightside Co.", "": "Everyone" },
+    },
     shortcut: {
       label: "Send a rush of cards",
       hint: "20 from Acme, then 1 from Brightside",
@@ -289,6 +300,13 @@ export const PROFILES: Record<string, Profile> = {
     main: ["create-card"],
     plan: ["write-text", "render-image", "deliver"],
     flow: { name: "priority", detail: "pro runs jump the queue" },
+    queue: {
+      by: "plan",
+      slots: { fix: 2, problem: 2 },
+      lanes: "single",
+      jumps: true,
+      names: { "": "Card studio" },
+    },
     shortcut: {
       label: "Send a rush of cards",
       hint: "20 free cards, then 2 pro cards",

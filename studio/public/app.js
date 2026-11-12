@@ -75,6 +75,7 @@ function draw(s) {
   drawMasthead(s);
   drawSend(s);
   drawLive(s);
+  drawQueue(s);
   drawTrace(s);
   drawCompare(s);
   drawDrawer(s);
@@ -208,6 +209,45 @@ function drawLive(s) {
         ${live.card.to ? `<p class="holiday-card-from">To ${esc(live.card.to)}</p>` : ""}</article>`
     : "";
   setHtml($("card"), action + card);
+}
+
+// ---------- The queue strip (Days 06 and 10) ----------
+
+// Chips are drawn in a lane's order: served first, then the waiting cards, next up on the left.
+function chipHtml(c, label) {
+  const pro = c.group === "pro";
+  const hue = pro ? "pro" : c.group.length === 1 ? c.group : "free";
+  return `<span class="chip" data-state="${c.state}" data-group="${esc(hue)}" title="${esc(label ?? c.id)}">${esc(c.id)}${pro ? '<b class="pill">Pro</b>' : ""}</span>`;
+}
+
+function drawQueue(s) {
+  const q = s.live?.queue;
+  $("queue").hidden = !q;
+  if (!q) return;
+  const lanes = q.lanes
+    .map((lane) => {
+      const slots = Array.from({ length: lane.slots }, (_, i) => {
+        const c = lane.serving[i];
+        return `<span class="slot">${c ? chipHtml(c, `${c.id}: being made`) : ""}</span>`;
+      }).join("");
+      const waiting =
+        lane.waiting
+          .map((c, i) => chipHtml(c, `${c.id}: queued #${i + 1} of ${lane.waiting.length}`))
+          .join("") + lane.retrying.map((c) => chipHtml(c, `${c.id}: trying again`)).join("");
+      return `<div class="lane"><span class="lane-name">${esc(lane.name)}</span><span class="slots">${slots}</span><span class="lane-count">${lane.waiting.length ? `${lane.waiting.length} waiting` : "No one waiting"}</span><span class="line">${waiting}</span></div>`;
+    })
+    .join("");
+  const done = q.done.map((c, i) => chipHtml(c, `${c.id}: delivered #${i + 1}`)).join("");
+  const notes = q.notes
+    .map(
+      (n) =>
+        `<li data-group="${esc(n.group === "pro" ? "pro" : n.group)}"><b>${esc(n.id)}</b> ${esc(n.text)}</li>`,
+    )
+    .join("");
+  setHtml(
+    $("queue"),
+    `${lanes}${done ? `<div class="lane"><span class="lane-name">Delivered</span><span class="line">${done}</span></div>` : ""}<ul class="queue-notes">${notes}</ul>`,
+  );
 }
 
 // ---------- Under the hood ----------

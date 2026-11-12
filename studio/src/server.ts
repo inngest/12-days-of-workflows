@@ -29,6 +29,7 @@ import {
 import { fetchLedger, type LedgerSummary, summarize } from "./ledger.js";
 import { FIELDS, type Field, type FieldId, PROFILES, type Profile } from "./profiles.js";
 import { type Figure, factsOf, proofOf, stampOf, statusOf } from "./proof.js";
+import { type QueueView, queueOf } from "./queue.js";
 
 const PORT = Number(process.env.STUDIO_PORT ?? 3100);
 
@@ -81,6 +82,7 @@ type Live = {
   feed: FeedLine[];
   card: { title: string; message: string; to: string } | null;
   stamp: string | null;
+  queue: QueueView | null; // who is being served and who waits (Days 06 and 10)
   status: string[]; // the status bar: calm product facts, never lesson figures
   action: string | null; // the label of a button that fits this moment, if any
 };
@@ -247,6 +249,7 @@ async function readState(wanted: string | undefined): Promise<State> {
       : [],
     card: started ? cardOf(profile, tracked, summary) : null,
     stamp,
+    queue: profile.queue ? queueOf(tracked, version.main[0], profile.queue, problem) : null,
     status: statusOf(active.nn, facts, {
       entries,
       connected: state.devServer,
