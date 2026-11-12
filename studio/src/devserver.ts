@@ -18,6 +18,7 @@ export type RunView = {
   status: "running" | "done" | "failed" | "cancelled";
   steps: StepView[];
   output: unknown;
+  queuedAt: number | null; // epoch ms: when the run was created, before it waited for a turn
   startedAt: number | null; // epoch ms
   endedAt: number | null;
   data: Record<string, unknown>; // the event data that started the run (the first event of a batch)
@@ -46,7 +47,7 @@ export async function devServerIsUp(): Promise<boolean> {
 
 // ---------- The list of runs ----------
 
-type ListedRun = { id: string; status: string; slug: string };
+type ListedRun = { id: string; status: string; slug: string; queuedAt: string | null };
 
 async function listRuns(since: number): Promise<ListedRun[]> {
   const from = new Date(since).toISOString();
@@ -57,11 +58,16 @@ async function listRuns(since: number): Promise<ListedRun[]> {
     const page: RunsPage = await gql<RunsPage>(`{
       runs(first: 200, ${after ? `after: "${after}", ` : ""}orderBy: [{ field: QUEUED_AT, direction: ASC }], filter: { from: "${from}" }) {
         pageInfo { hasNextPage endCursor }
-        edges { node { id status function { slug } } }
+        edges { node { id status queuedAt function { slug } } }
       }
     }`);
     for (const { node } of page.runs.edges)
-      runs.push({ id: node.id, status: node.status, slug: node.function.slug });
+      runs.push({
+        id: node.id,
+        status: node.status,
+        slug: node.function.slug,
+        queuedAt: node.queuedAt,
+      });
     after = page.runs.pageInfo.hasNextPage ? page.runs.pageInfo.endCursor : null;
   } while (after);
   return runs;
@@ -70,7 +76,9 @@ async function listRuns(since: number): Promise<ListedRun[]> {
 type RunsPage = {
   runs: {
     pageInfo: { hasNextPage: boolean; endCursor: string };
-    edges: { node: { id: string; status: string; function: { slug: string } } }[];
+    edges: {
+      node: { id: string; status: string; queuedAt: string | null; function: { slug: string } };
+    }[];
   };
 };
 
@@ -266,6 +274,7 @@ export async function readRuns(prefix: string, since: number): Promise<RunView[]
       status,
       steps,
       output: readOutput(detail.output),
+      queuedAt: run.queuedAt ? Date.parse(run.queuedAt) : null,
       startedAt: detail.startedAt ? Date.parse(detail.startedAt) : null,
       endedAt: detail.endedAt ? Date.parse(detail.endedAt) : null,
     };

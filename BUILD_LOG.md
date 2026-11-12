@@ -137,3 +137,17 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Day 09 turned out nicely as a grid of recipients: 24 hatched ×2 tiles broken, 50 checks and one ↻ fixed. Day 11's dollar figure is a constant in the page ($0.002 a write), because the warehouse ledger entry knows rows, not money.
 - Phones got a small fix while we were in there: the Before / After / Side by side switch pushed the page 10 px wide on a 390 px screen, and "for this text" wrapped under the big number. The fallback view also stopped saying "1 calls recorded".
 - A footgun worth knowing for the shoot: leftover `tsx watch` processes from an earlier `pnpm day` can keep a port and a Dev Server alive, so the next run silently lands on :8290. If a scenario seems to do nothing, check what is listening on 8288.
+
+## Phase: Product-style feed copy
+
+- The status feed next to the trace used to talk like a demo: a painter dropping brushes, a mail elf on the ice, a writer losing their train of thought. We rewrote every line to sound like a card product that wants its customer to feel looked after: "Having trouble reaching the image service, trying again (2)".
+- Failures now say what happened and what to expect. "We could not deliver your card. Please try sending it again." beats "Could not reach the inbox".
+- A card that stops no longer just stops. Every step a real product would show stays on screen, and the ones never reached read "Card not delivered" or "Artwork not created" instead of disappearing.
+- Reasons live in the line, like Day 02's "You were told why: …", all read from data we already had: the ledger's notify note, the event's `deliverAt`, a run's output.
+- Waiting got its own wording. Day 05 says when delivery is scheduled, Day 04 says nothing is sent until you approve, Day 07 says the card is waiting for a turn with the image service.
+- An expired Day 04 draft used to show "You approved it" because the wait step finishes when it times out. It now says you did not approve in time, and the delivery shows as not done.
+- Partial results read plainly too: Day 09 says "Could not deliver to 1 of 50 people. 49 delivered." and Day 12 counts "28 of 40 recipients loved it".
+- One real drift surfaced: the Day 07 trace label said "3 painter calls per 3 seconds" but the code throttles 4 per 10 seconds. The label now matches the code.
+- Day 12b's profile pointed at `create-card` and step ids the day never uses, so its feed could never have worked. It now follows `design-card`; it is cloud-only, so that one is untested.
+- The bottom strip is now a real status bar: "Connected · 1 card in progress · 3 cards delivered · Last delivery 2:14 pm", with day-specific lines like "1 card needs your approval" or "120 card opens recorded". The lesson figures ("Billed twice", retries, duplicates) didn't go anywhere: they are the same strip, shown only in presenter mode (press `p`), so the videos still get their payoff.
+- Days 06 and 10 now draw their queue: one strip, two uses. Day 10 shows a single line where the pro card slides to the front and finishes 3rd; the "no priority" run shows it last. Day 06 shows a lane per account, so Brightside's lone card is plainly not stuck behind Acme's twenty, while the shared-lane version has it at the back. Everything is read from the runs themselves (arrival time, plan or account, step starts, finish times). The one thing the studio didn't have was when a run was queued: the Dev Server's run start time is when it began running, not when it arrived, so we read the queued-at time too.

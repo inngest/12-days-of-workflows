@@ -213,3 +213,141 @@
     transform: translateY(100%);
   }
 }
+
+/* The status bar: a slim row pinned to the bottom, like a real app's. Presenters get the strip instead. */
+.statusbar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-small);
+  color: var(--ink-soft);
+}
+.statusbar[hidden] {
+  display: none;
+}
+
+/* The queue strip: slots (being made now), then the waiting line with the next card on the left. */
+.queue {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.lane {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.2rem;
+}
+.lane-name {
+  flex: none;
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+.slots {
+  display: flex;
+  flex: none;
+  gap: 0.35rem;
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--line);
+}
+.slot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.6rem;
+  height: 1.9rem;
+  border: 1px dashed var(--line);
+  border-radius: 0.5rem;
+}
+.line {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: nowrap; /* one horizontal line: next up on the left, the rest run off the right */
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+}
+.lane-count {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+.chip {
+  flex: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border: 2px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  font-size: var(--text-small);
+  line-height: 1.3;
+  transition:
+    transform 0.3s,
+    background 0.3s;
+}
+.chip[data-state="serving"] {
+  background: var(--lime);
+  border-color: var(--lime);
+}
+.chip[data-state="done"] {
+  opacity: 0.6;
+}
+.chip[data-group="a"] {
+  border-color: var(--evergreen);
+}
+.chip[data-group="b"] {
+  border-color: var(--coral-deep);
+  background: color-mix(in srgb, var(--coral) 25%, var(--surface));
+}
+.chip[data-group="pro"] {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 1px var(--brass);
+}
+.pill {
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-size: 0.7rem;
+}
+.queue-notes {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-small);
+}
+.queue-notes li[data-group="pro"] {
+  color: var(--brass);
+}
+.queue-notes li[data-group="b"] {
+  color: var(--coral-deep);
+}
+.queue-notes b {
+  margin-right: 0.25rem;
+}
+.chip[data-state="retrying"] {
+  border-style: dashed;
+  opacity: 0.75;
+}
