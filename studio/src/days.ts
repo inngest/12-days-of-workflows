@@ -1,8 +1,27 @@
 import type { Scenario } from "@12days/shared";
 import { type Day, dayId, listDays, loadDay, resolveDay } from "../../scripts/lib.js";
+import { PROFILES } from "./profiles.js";
 
-// The days send events to the Dev Server, so this process talks to it like `pnpm send` does.
-process.env.INNGEST_DEV = "1";
+/** Both Inngest keys are set in the studio's environment. Their values are never read or shown. */
+export const hasCloudKeys = () =>
+  Boolean(process.env.INNGEST_SIGNING_KEY && process.env.INNGEST_EVENT_KEY);
+
+/**
+ * Cloud mode is automatic: the keys are set and the day is one that wants Inngest Cloud
+ * (Days 12 and 12b). Every other day keeps using the local Dev Server, keys or not.
+ */
+export function cloudModeFor(nn: string): boolean {
+  const profile = PROFILES[nn];
+  return hasCloudKeys() && Boolean(profile?.cloudOnly || profile?.needsCloud);
+}
+
+/** Loads a day's client in the mode that fits it: the Dev Server, or Inngest Cloud (event key). */
+async function loadForMode(day: Day) {
+  // The client reads INNGEST_DEV when it is created, so set it before the day is imported.
+  if (cloudModeFor(day.nn)) delete process.env.INNGEST_DEV;
+  else process.env.INNGEST_DEV = "1";
+  return loadDay(day);
+}
 
 export type AliveDay = { nn: string; title: string; port: number; lastActivity: number };
 
@@ -49,7 +68,7 @@ export type ScenarioInfo = {
 
 /** The day's scenarios, read from its send.ts (the same file `pnpm send` uses). */
 async function loadScenarios(day: Day): Promise<Record<string, Scenario>> {
-  const { mod } = await loadDay(day);
+  const { mod } = await loadForMode(day);
   return mod.scenarios;
 }
 
@@ -66,7 +85,7 @@ export async function listScenarios(nn: string): Promise<ScenarioInfo[]> {
 /** Fires a scenario's events, exactly like `pnpm send NN scenario`. */
 export async function fireScenario(nn: string, name: string): Promise<void> {
   const day = resolveDay(nn);
-  const { inngest, mod } = await loadDay(day);
+  const { inngest, mod } = await loadForMode(day);
   const scenario = mod.scenarios[name];
   if (!scenario) throw new Error(`Day ${nn} has no scenario called ${name}`);
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -79,7 +98,7 @@ export async function sendWaves(
   waves: { name: string; data: Record<string, unknown> }[][],
   pauseMs = 300,
 ): Promise<void> {
-  const { inngest } = await loadDay(resolveDay(nn));
+  const { inngest } = await loadForMode(resolveDay(nn));
   for (const [i, events] of waves.entries()) {
     if (i > 0) await new Promise<void>((resolve) => setTimeout(resolve, pauseMs));
     await inngest.send(events);

@@ -119,7 +119,8 @@ export type Profile = {
   holding?: string; // what to say while events are held back and no run has started yet
   tip?: string; // one calm line under the Send button
   showsCard: boolean; // does a finished run produce a card worth showing?
-  cloudOnly?: boolean; // needs Inngest Cloud, so it cannot run here
+  cloudOnly?: boolean; // needs Inngest Cloud, so it cannot run without its keys
+  needsCloud?: boolean; // runs locally, but the studio follows it in Inngest Cloud when keys are set
 };
 
 const MESSAGE = "Warm wishes for a cozy, quiet season";
@@ -343,6 +344,7 @@ export const PROFILES: Record<string, Profile> = {
       "score-length": "step.score",
       "score-reaction": "defer",
     },
+    needsCloud: true,
     flow: { name: "experiment", detail: "classic or warm, 50 / 50" },
     action: {
       label: "The recipient loved it",

@@ -11,6 +11,30 @@ pnpm day 01        # terminal 1: the day and the Dev Server
 pnpm studio        # terminal 2: http://localhost:3100
 ```
 
+### Days 12 and 12b: Inngest Cloud
+
+These two are filmed against Inngest Cloud. Set both keys and the studio switches itself, with no
+flag. Days that run locally keep using the Dev Server even when the keys are set.
+
+```bash
+export INNGEST_SIGNING_KEY=signkey-… INNGEST_EVENT_KEY=…
+pnpm day 12 --cloud    # terminal 1: the day, connected to Cloud (no Dev Server)
+pnpm studio            # terminal 2: it picks up the keys from the same shell
+```
+
+- **Detection**: both keys are set in the studio's environment, and the selected day needs Cloud
+  (Day 12 or 12b). Day 12 also runs locally: start the studio without the keys for that.
+- **Sends** (Send card, the Presenter scenarios, the approve / react buttons) go to Inngest Cloud
+  with the event key, like `pnpm send NN --cloud`. Key values never reach the page.
+- **Status bar** says "Connected to Inngest Cloud".
+- **The Dev Server slide-up** becomes **Inngest Cloud**: Cloud refuses to be shown inside another
+  page, so a button opens the runs page in a new tab (`INNGEST_ENV` picks the environment, default
+  `production`).
+- **The live card** is driven by the day's own ledger of provider calls (message written, card
+  delivered), because run data in Cloud needs the Cloud REST API. There is no step trace or
+  "problem / fix" strip in this mode; follow the steps in Cloud.
+- **Without the keys**, Day 12b says what to set instead of sending, and Day 12 just runs locally.
+
 ## What you see
 
 - **Send a card**: a short form. Which fields show depends on the day (an account on Day 06, a plan
@@ -36,7 +60,7 @@ list, and loads only on first open. If the Dev Server is down it says how to res
 
 Add `?presenter=1` (or press `p`) for the scenario launcher: the same scenarios as `pnpm send`,
 their env hints, and **Clear**. A running app cannot take a new env var, so the drawer prints the
-line to restart with, such as `IMAGE_RATE=off pnpm day 06`. Day 12b is greyed out (needs Inngest Cloud).
+line to restart with, such as `IMAGE_RATE=off pnpm day 06`. Day 12b's scenarios need the Cloud keys (see above).
 
 ## Where the data comes from
 

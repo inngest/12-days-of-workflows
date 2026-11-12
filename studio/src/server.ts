@@ -5,8 +5,10 @@ import { cleanForm, wavesFor } from "./cards.js";
 import {
   type AliveDay,
   clearLedger,
+  cloudModeFor,
   findAliveDays,
   fireScenario,
+  hasCloudKeys,
   listScenarios,
   type ScenarioInfo,
   sendWaves,
@@ -20,6 +22,7 @@ import {
 } from "./devserver.js";
 import {
   childTries,
+  cloudFeed,
   type FeedLine,
   feedLines,
   pickFocus,
@@ -32,6 +35,13 @@ import { type Figure, factsOf, proofOf, stampOf, statusOf } from "./proof.js";
 import { type QueueView, queueOf } from "./queue.js";
 
 const PORT = Number(process.env.STUDIO_PORT ?? 3100);
+
+/** Where to watch runs when the day runs in Inngest Cloud (it cannot be shown inside the studio). */
+const CLOUD_URL = `https://app.inngest.com/env/${encodeURIComponent(process.env.INNGEST_ENV ?? "production")}/runs`;
+
+/** Said on a day that needs Inngest Cloud when the two keys are not both set. */
+const KEYS_MISSING =
+  "This day runs in Inngest Cloud. Set INNGEST_SIGNING_KEY and INNGEST_EVENT_KEY, start it with pnpm day {day} --cloud, then restart the studio.";
 
 // ---------- What the studio remembers between requests ----------
 
@@ -91,6 +101,8 @@ type State = {
   days: AliveDay[];
   day: string | null;
   devServer: boolean;
+  /** Cloud mode: the day runs in Inngest Cloud. `needed` days without keys show how to set them. */
+  cloud: { active: boolean; needed: boolean; url: string; message: string | null };
   profile: PublicProfile | null;
   scenarios: ScenarioInfo[];
   live: Live | null;
@@ -177,6 +189,7 @@ async function readState(wanted: string | undefined): Promise<State> {
     days,
     day: active?.nn ?? null,
     devServer,
+    cloud: { active: false, needed: false, url: CLOUD_URL, message: null },
     profile: null,
     scenarios: [],
     live: null,
@@ -189,11 +202,19 @@ async function readState(wanted: string | undefined): Promise<State> {
   const profile = PROFILES[active.nn];
   if (!profile) return state;
   state.profile = publicProfile(active.nn, active.title, profile);
+  const cloud = cloudModeFor(active.nn);
+  const needed = Boolean(profile.cloudOnly || profile.needsCloud);
+  state.cloud = {
+    active: cloud,
+    needed,
+    url: CLOUD_URL,
+    message: profile.cloudOnly && !hasCloudKeys() ? KEYS_MISSING.replace("{day}", active.nn) : null,
+  };
 
   const [scenarios, entries, runs] = await Promise.all([
     listScenarios(active.nn).catch(() => []),
     fetchLedger(active.port).catch(() => [] as LedgerEntry[]),
-    devServer ? readRuns(`day-${active.nn}-`, since).catch(() => []) : [],
+    devServer && !cloud ? readRuns(`day-${active.nn}-`, since).catch(() => []) : [],
   ]);
   state.scenarios = scenarios;
 
@@ -205,6 +226,12 @@ async function readState(wanted: string | undefined): Promise<State> {
 
   const tracked = runs.filter((r) => version.main.includes(r.fn));
   const started = mine !== null || runs.length > 0;
+  // Cloud mode has no runs to read. A card counts as finished once its email went out and the
+  // fakes have been quiet for 2 seconds; until then it is still being made.
+  const lastCall = Math.max(0, ...entries.map((e) => e.at));
+  const cloudRunning =
+    cloud && started && !sendError && !(summary.emailsSent > 0 && Date.now() - lastCall > 2000);
+  if (cloud) facts.running = cloudRunning ? 1 : 0;
   const figures = proofOf(active.nn, facts);
   const stamp = stampOf(active.nn, facts, problem);
 
@@ -229,7 +256,7 @@ async function readState(wanted: string | undefined): Promise<State> {
   state.live = {
     state: !started
       ? "idle"
-      : facts.running > 0 || runs.length === 0
+      : facts.running > 0 || (runs.length === 0 && !cloud)
         ? "running"
         : facts.failed > 0 && facts.done === 0
           ? "failed"
@@ -237,26 +264,29 @@ async function readState(wanted: string | undefined): Promise<State> {
     problem,
     finished: mainFn.filter((r) => r.status !== "running").length,
     total: mainFn.length,
-    feed: started
-      ? feedLines(
-          runs,
-          version.main,
-          version.plan,
-          profile.childStep,
-          entries,
-          problem ? undefined : profile.holding,
-        )
-      : [],
+    feed: !started
+      ? []
+      : cloud
+        ? cloudFeed(entries, cloudRunning)
+        : feedLines(
+            runs,
+            version.main,
+            version.plan,
+            profile.childStep,
+            entries,
+            problem ? undefined : profile.holding,
+          ),
     card: started ? cardOf(profile, tracked, summary) : null,
     stamp,
     queue: profile.queue ? queueOf(tracked, version.main[0], profile.queue, problem) : null,
     status: statusOf(active.nn, facts, {
       entries,
-      connected: state.devServer,
-      inProgress: mainFn.filter((r) => r.status === "running").length,
+      connected: cloud || state.devServer,
+      inProgress: cloud ? facts.running : mainFn.filter((r) => r.status === "running").length,
     }),
     action,
   };
+  if (cloud) state.live.status[0] = "Connected to Inngest Cloud";
   if (focus)
     state.trace = {
       ...traceOf(
@@ -273,7 +303,7 @@ async function readState(wanted: string | undefined): Promise<State> {
 }
 
 /** Clears the screen: ledger, Dev Server runs still going, and the hidden-before line. */
-async function clearScreen(port: number): Promise<void> {
+async function clearScreen(port: number, nn: string): Promise<void> {
   // Hide the old runs first, so a request that lands mid-clear never mistakes them for new ones.
   const earlier = since;
   since = Date.now();
@@ -281,7 +311,8 @@ async function clearScreen(port: number): Promise<void> {
   quiet = { key: "", since: 0 };
   sent = null;
   acted = false;
-  await cancelUnfinished(earlier).catch(() => {}); // a stalled Dev Server must not block the clear
+  // Runs in Inngest Cloud are not ours to cancel from here; only the local Dev Server is asked.
+  if (!cloudModeFor(nn)) await cancelUnfinished(earlier).catch(() => {}); // a stalled Dev Server must not block the clear
   await clearLedger(port);
   forgetFinishedRuns();
 }
@@ -337,7 +368,7 @@ async function startSend(
     }
     const prior =
       sent?.day === day ? snapshots.get(day)?.[sent.problem ? "problem" : "fix"] : undefined;
-    await clearScreen(alive.port);
+    await clearScreen(alive.port, day);
     if (prior && !prior.finished) prior.interrupted = true; // starting again cut that run short
     cardNo += 1;
     sent = { day, problem, cardId, title, to };
@@ -354,8 +385,12 @@ async function startSend(
 app.post("/api/send", async (req, res) => {
   const { day, problem, form } = req.body ?? {};
   const profile = profileOf(day);
-  if (!profile || profile.cloudOnly) {
+  if (!profile) {
     res.status(409).json({ error: "That day cannot send cards here" });
+    return;
+  }
+  if (profile.cloudOnly && !cloudModeFor(day)) {
+    res.status(409).json({ error: KEYS_MISSING.replace("{day}", day) });
     return;
   }
   const clean = cleanForm(profile, form);
@@ -379,9 +414,9 @@ app.post("/api/run", async (req, res) => {
     res.status(409).json({ error: "Unknown day or scenario" });
     return;
   }
-  // The same refusals the page shows: Cloud-only days and scenarios cannot run on this machine.
-  const cloudMessage = "That scenario needs Inngest Cloud, so it cannot run here";
-  if (profile.cloudOnly) {
+  // The same refusals the page shows, when the day or scenario needs Inngest Cloud and it is off.
+  const cloudMessage = KEYS_MISSING.replace("{day}", day);
+  if (profile.cloudOnly && !cloudModeFor(day)) {
     res.status(409).json({ error: cloudMessage });
     return;
   }
@@ -390,7 +425,7 @@ app.post("/api/run", async (req, res) => {
     res.status(409).json({ error: `Day ${day} has no scenario called ${scenario}` });
     return;
   }
-  if (info.needsCloud) {
+  if (info.needsCloud && !cloudModeFor(day)) {
     res.status(409).json({ error: cloudMessage });
     return;
   }
@@ -420,7 +455,7 @@ app.post("/api/action", async (req, res) => {
 app.post("/api/clear", async (req, res) => {
   const { day } = req.body ?? {};
   const alive = (await findAliveDays()).find((d) => d.nn === day);
-  if (alive) await clearScreen(alive.port);
+  if (alive) await clearScreen(alive.port, day);
   snapshots.delete(day);
   res.status(204).end();
 });
