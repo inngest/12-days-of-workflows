@@ -59,7 +59,7 @@ export async function listScenarios(nn: string): Promise<ScenarioInfo[]> {
     name,
     description: s.description,
     env: s.env ?? {},
-    needsCloud: s.requiresEnv !== undefined,
+    needsCloud: false, // the shared Scenario type has no cloud-only flag today
   }));
 }
 
