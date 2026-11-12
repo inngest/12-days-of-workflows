@@ -8,7 +8,8 @@ if (!dayArg) {
   console.error("Usage: pnpm send NN [scenario | --list]");
   process.exit(1);
 }
-const { inngest, mod } = await loadDay(resolveDay(dayArg));
+const day = resolveDay(dayArg);
+const { inngest, mod } = await loadDay(day);
 
 const list = () => {
   for (const [key, scenario] of Object.entries(mod.scenarios)) {
@@ -35,6 +36,13 @@ if (!scenario) {
   const valid = Object.keys(mod.scenarios).join("\n  ");
   console.error(`Unknown scenario "${name}". Valid scenarios:\n  ${valid}`);
   process.exit(1);
+}
+const needs = Object.entries(scenario.env ?? {}).map(([key, value]) => `${key}=${value}`);
+if (needs.length > 0) {
+  const vars = needs.join(" ");
+  console.log(
+    `This scenario needs: ${vars}. If the day was not started that way, restart it: ${vars} pnpm day ${day.nn}\n`,
+  );
 }
 const ids = await scenario.send({ inngest, sleep });
 console.log(`Sent ${ids.length} event(s):\n  ${ids.join("\n  ")}`);

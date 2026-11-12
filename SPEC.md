@@ -42,7 +42,7 @@ Full task spec: SPEC.md.
 - `pnpm starters` — regenerates the `starter` branch
 - `pnpm lint`
 
-## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0`)
+## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0` for Days 01-11, `^4.21.1` for Days 12 and 12b)
 - Never write v3 syntax. If an example you recall has a second
   trigger argument to createFunction, it is v3.
 - Triggers live in the options object: `{ id, triggers: [...] }`.
@@ -64,11 +64,11 @@ Full task spec: SPEC.md.
 - Days import only from `inngest` and `@12days/shared`. Never from another day.
 - Never change `@12days/shared` to make one day work. If a day needs a new
   fake behavior, propose the contract change and stop.
-- Fakes are deterministic: seeded RNG only, no network unless `USE_REAL_LLM=1`.
+- Fakes are deterministic: seeded RNG only, no network.
 - At most one comment per Inngest concept in `functions.ts`.
   Explanations go in the day's README.
 - Allowed dependencies: inngest, express, @types/express, tsx, typescript,
-  vitest, @biomejs/biome, zod (Day 12 only). Anything else: stop and ask.
+  vitest, @biomejs/biome, zod (Days 12 and 12b only). Anything else: stop and ask.
 
 ## On camera
 - Every day is a short video episode, so every scenario a README tells viewers
@@ -714,7 +714,7 @@ Problem: you changed the card prompt and have no idea whether recipients like it
 | --- | --- | --- | --- |
 | `experiment-40` | `REACTION_TTL=60s` | 40 cards; once the ledger shows 40 `writeCard` calls, one `card/reacted` per card with `loved = simulateReaction(cardId, variant)` | `create-card` Completed, count 40; `score-recipient-reaction` Completed, count 40; custom: each variant served ≥ 10 times |
 
-No `before.ts`: the “before” is shipping a prompt change blind, told in the README. Requires `inngest@^4.8.0`; scoring and deferred scoring are beta APIs ([Agent Evals quick start](https://www.inngest.com/docs/agent-evals/quick-start.md)).
+No `before.ts`: the “before” is shipping a prompt change blind, told in the README. Requires `inngest@^4.21.1`; scoring and deferred scoring are beta APIs ([Agent Evals quick start](https://www.inngest.com/docs/agent-evals/quick-start.md)).
 
 ```ts
 // client.ts
@@ -809,7 +809,7 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 
 **Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters`
 
-- [ ] Day 12 on `inngest@^4.8.0` with `scoreMiddleware`
+- [ ] Day 12 on `inngest@^4.21.1` with `scoreMiddleware`
 - [ ] Re-read every README against the template; every “Break it” command must match a scenario name
 - [ ] Print a table of lesson-line counts versus budgets for human review
 

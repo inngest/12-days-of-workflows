@@ -46,7 +46,7 @@ pnpm studio
 
 Fill in the card form and press Send card. A plain-language status feed follows the run, the dark panel beside it shows the real Inngest steps, and the switch at the top flips between the problem and the fix. The numbers that prove the lesson (billed once, zero duplicates, paid cards first) are kept for both. Scenarios, as `pnpm send` runs them, live in a presenter drawer (`?presenter=1`), and the **Dev Server** button (or `d`) slides the real Dev Server UI up over the page.
 
-Some scenarios need an environment variable, such as a rate limit for the fake image service or a shorter timeout. The day's README shows the exact line, and the presenter drawer prints it too. The variable goes on `pnpm day`, not on `pnpm send`, and a running app cannot pick up a new one, so restart the day with it set:
+Some scenarios need an environment variable, such as a rate limit for the fake image service or a shorter timeout. The day's README shows the exact line, and the presenter drawer prints it too. The variable goes on `pnpm day`, not on `pnpm send`, and a running app cannot pick up a new one, so restart the day with it set (`pnpm send` prints this line for you when a scenario needs it):
 
 ```bash
 IMAGE_RATE=5/3s pnpm day 07
