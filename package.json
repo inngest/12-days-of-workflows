@@ -11,6 +11,7 @@
     "send": "tsx scripts/send.ts",
     "check": "tsx scripts/check.ts",
     "starters": "tsx scripts/make-starters.ts",
+    "studio": "tsx studio/src/server.ts",
     "lint": "biome check ."
   },
   "devDependencies": {
