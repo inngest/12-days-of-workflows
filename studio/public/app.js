@@ -62,6 +62,8 @@ function draw(s) {
   }
   $("stage").hidden = false;
   if (s.error) showNotice(`That card could not be sent: ${s.error}`);
+  else if (s.cloud.message) showNotice(s.cloud.message);
+  else if (s.cloud.active) showNotice("");
   else if (!s.devServer)
     showNotice("The Dev Server is not answering on :8288. Restart the day with: pnpm day NN");
   else showNotice("");
@@ -143,17 +145,16 @@ function drawForm(p) {
 
 function drawSend(s) {
   const p = s.profile;
-  const busy = s.sending || p.cloudOnly;
+  const blocked = p.cloudOnly && !s.cloud.active; // a Cloud-only day, and the keys are not set
+  const busy = s.sending || blocked;
   $("send-btn").disabled = busy;
   $("send-btn").textContent = s.sending ? "Sending..." : "Send card";
   const shortcut = $("shortcut");
   if (shortcut) shortcut.disabled = busy;
 
   const lines = [];
-  if (p.cloudOnly) lines.push("This day needs Inngest Cloud, so it cannot send cards here.");
-  else {
-    if (p.tip) lines.push(p.tip);
-  }
+  if (blocked) lines.push(s.cloud.message);
+  else if (p.tip) lines.push(p.tip);
   setHtml($("send-hint"), lines.map(esc).join("<br>"));
 
   // A running app cannot take a scenario's env, so say how to start the day for the rush button.
@@ -333,9 +334,13 @@ function drawDrawer(s) {
   const env = Object.entries(picked?.env ?? {}).map(([k, v]) => `${k}=${v}`);
   const lines = [picked ? `${picked.description}.` : ""];
   if (env.length) lines.push(`Start the day with: ${env.join(" ")} pnpm day ${s.day}`);
-  if (picked?.needsCloud) lines.push("This one needs Inngest Cloud, so it cannot run here.");
+  const noCloud = picked?.needsCloud && !s.cloud.active;
+  if (noCloud)
+    lines.push(
+      `This one runs in Inngest Cloud. Set INNGEST_SIGNING_KEY and INNGEST_EVENT_KEY, start the day with pnpm day ${s.day} --cloud, then restart the studio.`,
+    );
   setHtml($("scenario-note"), lines.map(esc).join("<br>"));
-  $("run").disabled = s.sending || !picked || picked.needsCloud;
+  $("run").disabled = s.sending || !picked || noCloud;
   $("run").textContent = s.sending ? "Sending..." : "Run scenario";
 }
 
@@ -355,7 +360,20 @@ function showRun(id) {
 
 /** Loads the frame lazily, and only while the Dev Server answers. Never yanks a page away. */
 function drawDevPanel(s) {
+  const cloud = s.cloud.active;
+  $("dev-open").textContent = cloud ? "Inngest Cloud" : "Dev Server";
+  $("dev-title").textContent = cloud ? "Inngest Cloud" : "Inngest Dev Server";
+  $("cloud-open").href = s.cloud.url;
+  $("cloud-panel").hidden = !cloud;
+  $("dev-tab").hidden = cloud;
   if ($("devpanel").hidden) return;
+  if (cloud) {
+    // Inngest Cloud refuses to be framed, so there is a button instead of the page.
+    $("dev-down").hidden = true;
+    $("dev-frame").hidden = true;
+    $("dev-current").hidden = true;
+    return;
+  }
   $("dev-down").hidden = s.devServer;
   $("dev-frame").hidden = !s.devServer;
   if (s.devServer && !$("dev-frame").getAttribute("src")) showRun(currentRun());

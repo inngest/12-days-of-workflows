@@ -85,6 +85,9 @@ REACTION_TTL=60s pnpm day 12 --cloud
 pnpm send 12 experiment-40 --cloud
 ```
 
+Then run `pnpm studio` in the same shell: with both keys set it sends to Cloud and shows a button
+to open the runs page.
+
 `--cloud` skips the Dev Server and connects the app to Inngest Cloud with `connect()` over an
 outbound WebSocket, so your laptop needs no public URL. The ledger wall stays on localhost.
 

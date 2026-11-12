@@ -63,12 +63,16 @@
     </div>
     <div id="devpanel" class="devpanel" role="dialog" aria-modal="true" aria-label="Inngest Dev Server" hidden>
       <header class="devpanel-bar">
-        <h2>Inngest Dev Server</h2>
+        <h2 id="dev-title">Inngest Dev Server</h2>
         <button id="dev-current" type="button" class="text-button" hidden>Show current run</button>
         <a id="dev-tab" class="text-button" href="http://localhost:8288/runs" target="_blank" rel="noopener">Open in a new tab</a>
         <button id="dev-close" type="button" class="text-button">Close (Esc)</button>
       </header>
       <p id="dev-down" class="devpanel-note" hidden>The Dev Server is not answering on :8288. Restart the day with: pnpm day NN</p>
+      <div id="cloud-panel" class="devpanel-note" hidden>
+        <p>Inngest Cloud cannot be shown inside this page, so it opens in its own tab.</p>
+        <p><a id="cloud-open" class="button coral" href="https://app.inngest.com" target="_blank" rel="noopener">Open in Inngest Cloud</a></p>
+      </div>
       <iframe id="dev-frame" title="Inngest Dev Server"></iframe>
     </div>
     <script type="module" src="/app.js"></script>

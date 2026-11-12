@@ -232,6 +232,22 @@ function linesFromLedger(entries: LedgerEntry[], running: boolean): FeedLine[] {
   return lines.slice(-9);
 }
 
+/**
+ * In Inngest Cloud the studio cannot read runs (only the local Dev Server answers that), so the
+ * feed follows what the fake providers did, as the day's own app reports it. The steps themselves
+ * are in Inngest Cloud.
+ */
+export function cloudFeed(entries: LedgerEntry[], running: boolean): FeedLine[] {
+  const lines = linesFromLedger(entries, false).filter((l) => l.id !== "next");
+  if (running)
+    lines.push({
+      id: "cloud",
+      status: "running",
+      text: "Your card is being made in Inngest Cloud",
+    });
+  return lines;
+}
+
 // ---------- The run trace ----------
 
 export type TraceRow = {

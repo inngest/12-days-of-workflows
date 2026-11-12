@@ -107,6 +107,8 @@ REACTION_TTL=60s pnpm day 12b --cloud
 pnpm send 12b design-1 --cloud
 ```
 
+Or run `pnpm studio` in the same shell: with both keys set it sends to Cloud for you.
+
 The ledger wall at http://localhost:3112 has **Request card c1**, **c1: Loved it** and
 **c1: Meh** buttons.
 
