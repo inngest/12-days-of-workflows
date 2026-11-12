@@ -26,20 +26,26 @@ cancelOn: [{ event: cardDeleted, match: "data.cardId" }],
 await step.sleepUntil("wait-for-delivery-date", event.data.deliverAt);
 ```
 
-The nightly cleanup is a cron trigger. A second, event trigger lets you run it now:
+```sh
+pnpm send 05 scheduled
+pnpm send 05 delete-before-delivery
+```
+
+`scheduled` delivers five seconds after it's sent. `delete-before-delivery` ends as Cancelled
+with no mail.
+
+### One more: clean up every night
+
+Drafts nobody approved pile up. A cron trigger cleans them at 3am, and a second, event trigger
+lets you run it now:
 
 ```ts
 triggers: [{ cron: "TZ=America/New_York 0 3 * * *" }, cleanupRequested],
 ```
 
 ```sh
-pnpm send 05 scheduled
-pnpm send 05 delete-before-delivery
 pnpm send 05 cleanup
 ```
-
-These scenarios need no environment variable. `scheduled` delivers five seconds after it's sent. `delete-before-delivery` ends as Cancelled
-with no mail. `cleanup` runs the draft cleanup without waiting for 3am.
 
 ## Watch it
 
@@ -47,8 +53,8 @@ In http://localhost:8288 the `schedule-delivery` run shows `wait-for-delivery-da
 its wake-up time. Send `card/deleted` and the run flips to Cancelled. The cleanup function lists
 both triggers, and the cron's next run time, on its function page.
 
-Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its
-problem/fix switch matches `delete-before-delivery-before` and `delete-before-delivery`.
+The ledger wall at http://localhost:3005 shows a delivery appear five seconds after `scheduled`, and
+none after `delete-before-delivery`.
 
 ## In your app
 
@@ -58,4 +64,4 @@ as deletion, unsubscribe or refund.
 
 ## Next
 
-Tomorrow's problem: one customer sent 20 cards and now everyone else is waiting.
+So far every card has been on its own. Tomorrow one account sends twenty at once.

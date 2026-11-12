@@ -11,8 +11,7 @@ export async function insertRows(table: string, rows: object[]): Promise<{ inser
     ok: true,
     meta: { table, rows: rows.length },
   });
-  console.log(
-    `[warehouse] insertRows ${table} ${rows.length} rows, billed 1 write (call #${call})`,
-  );
+  const count = rows.length === 1 ? "1 row" : `${rows.length} rows`;
+  console.log(`[warehouse] insertRows ${table} ${count}, billed 1 write (call #${call})`);
   return { inserted: rows.length };
 }

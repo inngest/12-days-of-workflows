@@ -1,104 +1,122 @@
-# Day 12b: The agent writes code. Where does it run?
-
-> **Heads up: Sandboxes are an open beta, an experimental API (`inngest/experimental`), and
-> Cloud-only (Pro plan or above).** The local Dev Server cannot run them: the `render-card` step
-> fails fast and asks you to `inngest login`. The rest of this series runs locally; this bonus day
-> needs an Inngest Cloud account.
+# Day 12b: Can the agent design the card, safely?
 
 ## The problem
 
-A card-designer agent writes each card as code, a few lines of TypeScript that draw an SVG. Running
-code an LLM just wrote inside your own server is a bad idea: it can throw, hang or do anything.
-And once it runs, "did it work?" is only half the question. The other half is whether the
-recipient loved the card.
+You let an AI agent design each holiday card as code, and the code has to run somewhere. Running
+it on your own servers is risky, and nothing tells you whether one kind of design works better
+than another.
 
 ## Break it
 
-There is no `-before` scenario. The naive version is the one you'd write first: `eval` or
-`import` the generated code inside your own process and hope. One bad card can throw, hang the
-event loop, or touch anything on the server.
+There's no `-before` scenario. The naive version asks the model for a program and runs it right
+inside your app, so one bad design can crash the worker, hang it, or touch things it shouldn't.
+It also records nothing about which style of design broke and which didn't, so "bold looks great"
+and "bold keeps failing" are both just opinions.
 
 ## Fix it
 
-Run the generated code in an Inngest Sandbox, a throwaway microVM, instead of on our servers.
-`step.sandbox.typescript` creates one, runs the code, validates the result against a schema, and
-destroys it.
+Three ideas: the agent is the brain, the sandbox is the hands, and durable execution keeps score.
+
+The brain: an experiment splits cards between two design styles, and each style asks the agent
+(a fake here) for a small Node program that prints the card as SVG:
 
 ```ts
-let renders = true;
-try {
-  await step.sandbox.typescript("render-card", card.code, {
-    input: { message: event.data.prompt },
-    schema: { output: z.object({ svg: z.string() }) },
-    timeout: "20s",
-  });
-} catch (error) {
-  if (getSandboxError(error)) throw error; // the sandbox itself failed: not the card's fault
-  renders = false;
+const { result, variant, experimentRef } = await group.experiment("design-prompt", {
+  variants: {
+    classic: () => step.run("design-classic", () => designCard({ prompt, variant: "classic" })),
+    bold: () => step.run("design-bold", () => designCard({ prompt, variant: "bold" })),
+  },
+  select: experiment.weighted({ classic: 50, bold: 50 }),
+});
+```
+
+The hands: the program runs in an Inngest Sandbox, a throwaway VM in Inngest Cloud, instead of on
+your servers. A crash comes back as data (`exitCode`, `stderr`), not as an exception:
+
+```ts
+const sandbox = await step.sandbox.create("create-renderer", {
+  name: `card-${cardId}`,
+  vcpu: 1,
+  memoryMb: 1024,
+});
+const first = await sandbox.commands.run("render-card", ["node", "-e", result.code]);
+```
+
+If the design broke, the agent gets the error and writes a revision. One revision is enough here:
+
+```ts
+let render = first;
+if (first.exitCode !== 0) {
+  const error = first.stderr;
+  const fix = await step.run("revise-design", () =>
+    designCard({ prompt, variant, previousError: error }),
+  );
+  render = await sandbox.commands.run("render-revision", ["node", "-e", fix.code]);
 }
-await step.score("score-renders", { name: "card-renders", value: renders });
 ```
 
-Broken code makes the step fail. Catching that turns a crash into a number: `card-renders` is
-`false`, the run still completes. About a quarter of the fake agent's cards are broken on purpose
-(some throw, some are a syntax error), so the score visibly varies. A second, deferred scorer
-(the same one as Day 12) waits for the recipient's `card/reacted` and records
-`recipient-loved-it`.
-
-The client needs the Sandbox middleware next to the scoring one:
+The score: whether the first design rendered is recorded against the variant, and the recipient's
+reaction is scored later by the same deferred scorer as Day 12:
 
 ```ts
-middleware: [chaosMiddleware, scoreMiddleware(), sandboxMiddleware()],
+await inngest.score.experiment({
+  name: "renders-first-try",
+  value: first.exitCode === 0,
+  experiment: experimentRef,
+});
+defer("score-reaction", { function: reactionScorer, data: { cardId }, experiment: experimentRef });
+await sandbox.destroy("destroy-renderer");
 ```
 
-Both come from `inngest/experimental` and need `inngest@^4.21.1`.
+`step.score()` has no `experiment` option, so `inngest.score.experiment()` is how a score gets
+credited to a variant. It runs at the function body, outside any step. The function returns
+`{ variant, svg }`, so the finished card is in the run's output.
 
-### Run it (Inngest Cloud required)
-
-Sandboxes live in Inngest Cloud, so something has to be connected to it. Without that, the
-`render-card` step fails immediately with `cloud_login_required`, and every card scores
-`card-renders = false`. Two ways to connect:
-
-1. **Local app, Cloud sandboxes.** Log the Dev Server in to your Cloud account (the error message
-   suggests `inngest login`; see the [CLI docs](https://www.inngest.com/docs/cli)), then start the
-   day with a short reaction wait and send the scenario. `REACTION_TTL` is 7 days by default:
-
-   ```sh
-   REACTION_TTL=20s pnpm day 12b
-   pnpm send 12b render-20
-   ```
-
-2. **Everything on Cloud.** Run the app without the Dev Server and sync it to a Cloud environment on
-   a Pro plan. Never commit keys; set them in your shell:
-
-   ```sh
-   export INNGEST_SIGNING_KEY=...   # your environment's signing key
-   export INNGEST_EVENT_KEY=...     # to send events
-   PORT=3013 pnpm --filter @12days/day-12b exec tsx src/index.ts
-   ```
-
-   Then sync `http://<your-public-url>:3013/api/inngest` in the Cloud dashboard. Put
-   `REACTION_TTL=20s` in front of the `PORT=3013` command so the reaction wait is short.
-
-`render-20` sends 20 cards, waits for the agent to write them, then sends one `card/reacted` per
-card. `pnpm check 12b` always typechecks and checks the lesson budget; it runs `render-20` only
-when `SANDBOX_CLOUD=1` is set (`SANDBOX_CLOUD=1 pnpm check 12b`), because nothing about it can
-pass without Cloud. `pnpm send` itself does not look at `SANDBOX_CLOUD`.
+Sandboxes and scoring are both beta, and they need `sandboxMiddleware()` and `scoreMiddleware()`
+from `inngest/experimental` on the client (see `client.ts`). The fake designer breaks about one
+card in three, and "bold" breaks more often than "classic".
 
 ## Watch it
 
-In your Cloud dashboard, open a `create-card` run: `write-card-code`, then `render-card` with the
-Sandbox's activity in the trace, then `score-renders`. Scores (`card-renders`,
-`recipient-loved-it`) are Cloud features too.
+Sandboxes are an open beta on Inngest Cloud (Pro and up), so this day can't run on a plain local
+Dev Server, and `pnpm check` skips it. Log in once, and the local Dev Server runs your functions
+and runs locally while the sandboxes run in Cloud:
+
+```sh
+npx inngest-cli@latest login
+REACTION_TTL=60s pnpm day 12b
+pnpm send 12b design-1
+```
+
+Card `c1` is one whose first design always breaks. In the run trace at http://localhost:8288 you
+should see `design-classic` or `design-bold`, then `create-renderer`, `render-card` (it fails with
+a `ReferenceError`), `revise-design`, `render-revision` (it works), `destroy-renderer` and
+`deliver`. The run's output holds the rendered SVG.
+
+For the comparison, send twelve cards and let every recipient react:
+
+```sh
+pnpm send 12b design-12
+```
+
+To record against Inngest Cloud itself, with keys from your environment (see Day 12):
+
+```sh
+export INNGEST_SIGNING_KEY=signkey-… INNGEST_EVENT_KEY=…
+REACTION_TTL=60s pnpm day 12b --cloud
+pnpm send 12b design-1 --cloud
+```
+
+The ledger wall at http://localhost:3112 has **Request card c1**, **c1: Loved it** and
+**c1: Meh** buttons.
 
 ## In your app
 
-Anywhere an LLM produces something executable (code, queries, scripts), run it in a sandbox and
-score whether it ran. Create sandboxes through the one-call runners when you can: they clean up
-after themselves. With the lower-level `step.sandbox.create`, destroying the sandbox after a
-permanent failure is your job.
+Any time an agent produces something you must execute (code, a script, a query), run it in a
+sandbox and treat the exit code as an ordinary result. Destroy the sandbox when you're done; if a
+run ends early, the SDK's cleanup function destroys it for you. Then score two things: did it
+work, and was it good, and keep the score names stable.
 
 ## Next
 
-That's the end of the series. Your workflows now survive failure, wait for people and dates, keep
-fair and fast under load, run untrusted code safely, and tell you whether they're any good.
+That's Day 12, cut B. Back to [Day 12](../12-measure-what-works) for the experiment on its own.

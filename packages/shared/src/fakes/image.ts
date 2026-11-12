@@ -1,5 +1,4 @@
-import { RetryAfterError } from "inngest";
-import { chaosFailure, chaosRetryInMs, currentCardId } from "../chaos.js";
+import { chaosFailure, currentCardId } from "../chaos.js";
 import { ProviderError } from "../errors.js";
 import { nextCallNumber, onReset, record } from "../ledger.js";
 import { hash, seededRandom, sleep } from "./seed.js";
@@ -13,18 +12,25 @@ function rateLimit(): { calls: number; periodMs: number } | null {
   return { calls: Number(match[1]), periodMs: Number(match[2]) * 1000 };
 }
 
-let recentCalls: number[] = [];
+// A token bucket, like most real providers: `calls` tokens to start, one back every
+// periodMs / calls. So "5/10s" allows a burst of 5, then one call every 2 s.
+let bucket: { tokens: number; at: number } | null = null;
 onReset(() => {
-  recentCalls = [];
+  bucket = null;
 });
 
-/** Returns ms until a slot frees up, or 0 if this call is allowed (and takes the slot). */
+/** Returns ms until a token is free, or 0 if this call is allowed (and spends a token). */
 function takeRateSlot(now: number): number {
   const limit = rateLimit();
   if (!limit) return 0;
-  recentCalls = recentCalls.filter((at) => now - at < limit.periodMs);
-  if (recentCalls.length >= limit.calls) return recentCalls[0] + limit.periodMs - now;
-  recentCalls.push(now);
+  const msPerToken = limit.periodMs / limit.calls;
+  const prev = bucket ?? { tokens: limit.calls, at: now };
+  const tokens = Math.min(limit.calls, prev.tokens + (now - prev.at) / msPerToken);
+  if (tokens < 1) {
+    bucket = { tokens, at: now };
+    return Math.ceil((1 - tokens) * msPerToken);
+  }
+  bucket = { tokens: tokens - 1, at: now };
   return 0;
 }
 
@@ -44,13 +50,7 @@ export async function renderImage(input: { text: string }): Promise<{ url: strin
       meta: { status: 429 },
     });
     console.log(`${label} rate limited, free in ${msUntilFree} ms (call #${call})`);
-    const rateLimited = new ProviderError(429, msUntilFree);
-    // With chaos.image.retryInMs, retry when the slot frees (at least retryInMs) instead of default backoff.
-    const retryInMs = chaosRetryInMs("image");
-    if (retryInMs === undefined) throw rateLimited;
-    throw new RetryAfterError(rateLimited.message, Math.max(retryInMs, msUntilFree), {
-      cause: rateLimited,
-    });
+    throw new ProviderError(429, msUntilFree);
   }
 
   const seed = hash(input.text);

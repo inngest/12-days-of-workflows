@@ -9,7 +9,9 @@ export const recordOpens = inngest.createFunction(
     // TODO: Collect up to 50 opens, or whatever arrives in 5 s
   },
   // TODO: Handle the whole batch at once
-  async ({ event, step }) => step.run("insert-open", () => insertRows("card_opens", [event.data])),
+  async ({ event, step }) => {
+    return step.run("insert-open", () => insertRows("card_opens", [event.data]));
+  },
 );
 
 export const functions = [recordOpens];

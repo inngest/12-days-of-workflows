@@ -5,7 +5,7 @@
   "dependencies": {
     "@12days/shared": "workspace:*",
     "express": "^5.3.0",
-    "inngest": "^4.21.1",
+    "inngest": "^4.8.0",
     "zod": "^4.6.7"
   }
 }

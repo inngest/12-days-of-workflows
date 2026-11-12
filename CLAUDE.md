@@ -7,12 +7,14 @@ Full task spec: SPEC.md.
 ## Commands
 - `pnpm install`
 - `pnpm day NN` — runs day NN on port 30NN plus the Dev Server on :8288
+- `pnpm day NN --cloud` / `pnpm send NN [scenario] --cloud` — same against Inngest Cloud over
+  `connect()`; needs `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY` (Day 12 recording)
 - `pnpm send NN [scenario]` — fires a scenario's events
 - `pnpm check [NN]` — typecheck + scenario assertions (all days if NN omitted)
 - `pnpm starters` — regenerates the `starter` branch
 - `pnpm lint`
 
-## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0` for Days 01-11, `^4.21.1` for Days 12 and 12b)
+## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0`)
 - Never write v3 syntax. If an example you recall has a second
   trigger argument to createFunction, it is v3.
 - Triggers live in the options object: `{ id, triggers: [...] }`.
@@ -34,11 +36,11 @@ Full task spec: SPEC.md.
 - Days import only from `inngest` and `@12days/shared`. Never from another day.
 - Never change `@12days/shared` to make one day work. If a day needs a new
   fake behavior, propose the contract change and stop.
-- Fakes are deterministic: seeded RNG only, no network.
+- Fakes are deterministic: seeded RNG only, no network unless `USE_REAL_LLM=1`.
 - At most one comment per Inngest concept in `functions.ts`.
   Explanations go in the day's README.
 - Allowed dependencies: inngest, express, @types/express, tsx, typescript,
-  vitest, @biomejs/biome, zod (Days 12 and 12b only), and any `@types/*` package.
+  vitest, @biomejs/biome, zod (Day 12 only), and any `@types/*` package.
   Anything else: ask, especially if it would make the code easier to read
   on camera.
 
@@ -47,6 +49,16 @@ Full task spec: SPEC.md.
   `BUILD_LOG.md`: 5–10 conversational bullets on what we built, what
   surprised us, and the decisions we made. It feeds a blog post, so tell
   the story; don't dump file lists, versions or test output.
+
+## Notion tech spec
+- Video outlines and per-day graphics are built from the Notion page
+  "12 Days of Workflows - Tech Spec":
+  https://app.notion.com/p/inngest/12-Days-of-Workflows-Tech-Spec-409b64753bbd80939db3d5e950d670d8
+- Its table (hook, demo beat, takeaway, visual concept) must match what the
+  code demos: counts, timings, failure numbers, function and step names.
+- At the end of every phase, or whenever a change alters a day's demo, fetch
+  the page and fix factual drift (numbers, primitives). Framing changes to a
+  hook, takeaway or visual concept are the team's call: flag them, don't rewrite.
 
 ## On camera
 - Every day is a short video episode, so every scenario a README tells viewers

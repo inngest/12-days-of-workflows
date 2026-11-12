@@ -25,7 +25,7 @@ reuses its result. Only the failed step runs again.
 ```ts
 const card = await step.run("write-text", () => writeCard(event.data));
 const image = await step.run("render-image", () => renderImage({ text: card.text }));
-await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+await step.run("deliver", () => sendCard(event.data));
 ```
 
 ```sh
@@ -44,7 +44,8 @@ Open http://localhost:8288 and click the `create-card` run. The timeline shows `
 finishing once, `render-image` failing twice with retry attempts, then succeeding, then `deliver`.
 Compare it with the `create-card-before` run, which is one opaque block retried three times.
 
-Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its problem/fix switch matches the `-before` scenario and the fixed one.
+The ledger wall at http://localhost:3001 keeps score: LLM calls per card reads 3.0 before the fix
+and 1.0 after.
 
 ## In your app
 
@@ -54,4 +55,4 @@ JSON-serializable, because Inngest stores it.
 
 ## Next
 
-Tomorrow's problem: stop retrying things that are never going to work.
+Some failures will never succeed, however many times you retry. Tomorrow we stop retrying them.

@@ -6,4 +6,4 @@ export const cardRequested = eventType("card/requested", {
   schema: staticSchema<CardRequest>(),
 });
 
-export const imageRequested = invoke(staticSchema<{ text: string }>());
+export const invokedWithText = invoke(staticSchema<{ text: string }>());

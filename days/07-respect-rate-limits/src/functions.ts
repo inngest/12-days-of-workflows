@@ -1,13 +1,13 @@
 import { renderImage, sendCard, writeCard } from "@12days/shared";
 import { inngest } from "./client.js";
-import { cardRequested, imageRequested } from "./events.js";
+import { cardRequested, invokedWithText } from "./events.js";
 
 export const renderCardImage = inngest.createFunction(
   {
     id: "render-card-image",
-    triggers: [imageRequested],
     retries: 10,
-    // TODO: Start at most 3 renders per 3 seconds
+    triggers: [invokedWithText],
+    // TODO: Start at most 4 renders per 10 seconds, just under the provider's 5
   },
   async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),
 );
@@ -20,7 +20,7 @@ export const createCard = inngest.createFunction(
       function: renderCardImage,
       data: { text: card.text },
     });
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
     return { text: card.text, image: image.url };
   },
 );

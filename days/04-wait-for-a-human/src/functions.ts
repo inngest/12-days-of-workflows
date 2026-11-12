@@ -9,7 +9,7 @@ export const createCard = inngest.createFunction(
     await step.run("render-image", () => renderImage({ text: card.text }));
     await step.run("save-draft", () => drafts.save(event.data.cardId, card.text));
     // TODO: Pause until the sender approves, or give up
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
     return { status: "delivered" };
   },
 );

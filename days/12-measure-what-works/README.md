@@ -2,30 +2,37 @@
 
 ## The problem
 
-You rewrote the card prompt and shipped it. Now you have no idea whether recipients like the new
-cards more, because the only signal, whether they react, shows up days after the run is over.
+You rewrote the card prompt to sound warmer and shipped it. Nobody can say whether recipients like
+the new cards more, because the only signal, whether someone loved their card, shows up long after
+the request that wrote it has finished.
 
 ## Break it
 
-There is no `-before` shot for this day. The "before" is the thing most teams do: ship the new
-prompt to everyone, watch a dashboard for a week, and argue about whether the bump was the prompt
-or the season. You can't tell, because nothing connects a card to the reaction it caused.
+There's no `-before` scenario today. The "before" is what most teams do: swap the prompt for
+everyone and go by gut feel. Nothing records which prompt wrote which card, so a later reaction
+can't be credited to either one.
 
 ## Fix it
 
-Split traffic between two tones, then score every card when its recipient reacts, crediting the
-variant that wrote it.
+Three pieces. First, an experiment splits traffic between the two prompts and remembers which one
+each run got:
 
 ```ts
-const { result: card, variant, experimentRef } = await group.experiment("card-tone", {
+const { prompt } = event.data;
+const { result, variant, experimentRef } = await group.experiment("card-tone", {
   variants: {
-    classic: () => step.run("write-classic", () => writeCard({ ...event.data, variant: "classic" })),
-    warm: () => step.run("write-warm", () => writeCard({ ...event.data, variant: "warm" })),
+    classic: () => step.run("write-classic", () => writeCard({ prompt, variant: "classic" })),
+    warm: () => step.run("write-warm", () => writeCard({ prompt, variant: "warm" })),
   },
   select: experiment.weighted({ classic: 50, warm: 50 }),
 });
+```
 
-await step.score("score-length", { name: "fits-on-card", value: card.text.length <= 280 });
+Second, score what you know right away, and hand what you'll learn later to a deferred scorer,
+tagged with the variant:
+
+```ts
+await step.score("score-length", { name: "fits-on-card", value: result.text.length <= 280 });
 defer("score-reaction", {
   function: reactionScorer,
   data: { cardId: event.data.cardId },
@@ -33,57 +40,69 @@ defer("score-reaction", {
 });
 ```
 
-The scorer is its own function. It waits for the recipient's `card/reacted` event and returns a
-score. The card's run does not wait: `defer` hands off and the run finishes.
+Third, the scorer is a durable function that waits days for the recipient's reaction:
 
 ```ts
 export const reactionScorer = createScorer(
   inngest,
   { id: "score-recipient-reaction", schema: z.object({ cardId: z.string() }) },
-  async ({ event, step }) => {
-    const reaction = await step.waitForEvent("wait-for-reaction", { ... });
-    if (!reaction) return null;
+  async ({ step }) => {
+    const reaction = await step.waitForEvent("wait-for-reaction", {
+      event: cardReacted,
+      timeout: process.env.REACTION_TTL ?? "7d",
+      match: "data.cardId",
+    });
+    if (reaction === null) return null;
     return { name: "recipient-loved-it", value: reaction.data.loved };
   },
 );
 ```
 
+`match: "data.cardId"` pairs each reaction with the card this scorer was deferred for, just like
+the approval on Day 04.
+
+`step.score()` needs `scoreMiddleware()` from `inngest/experimental` on the client (see
+`client.ts`). Scoring and experiments are beta APIs.
+
 ```sh
-REACTION_TTL=15s pnpm day 12   # the reaction wait is 7d in production; 15 seconds for the video
+REACTION_TTL=60s pnpm day 12
 pnpm send 12 experiment-40
 ```
 
-The scenario sends 40 cards, waits until all 40 are written, then sends one `card/reacted` per
-card. The fake recipients are deterministic: `warm` is loved about 70% of the time, `classic`
-about 40%. Without `REACTION_TTL`, the scorers would wait the full seven days, so set it when you
-start the day. A reaction that never arrives times out and the scorer returns `null`, which
-records no score.
-
-`experiment.weighted` picks a variant per run. If a recipient should always get the same tone,
-use `experiment.bucket(event.data.cardId, ...)` instead.
+Forty cards go out, split between `classic` and `warm`. Once they're delivered, every recipient
+reacts, and each card's scorer records whether it was loved. In this fake, warm cards are loved
+about 70% of the time and classic about 40%.
 
 ## Watch it
 
-In http://localhost:8288, open a `create-card` run: the `card-tone` group shows which variant ran,
-and only that variant's `write-*` step appears. Open its `score-recipient-reaction` run to see
-`wait-for-reaction` resolve. Every `[llm]` line in the terminal names the card and its variant.
+The comparison itself (variants side by side, love rate per tone) shows up in **Inngest Cloud**.
+The Dev Server doesn't display experiments or scores yet; its Experiments and Scores pages say so.
+To see it, run the day against Cloud with keys from an Inngest environment:
 
-The Dev Server shows runs and steps only. Scores and the per-tone comparison, how much more often
-`warm` is loved than `classic`, are visible in Inngest Cloud only: open the app there to see
-`recipient-loved-it` broken down by `card-tone`. `pnpm check 12` asserts only on runs and the
-ledger, since scores can't be read back from the Dev Server.
+```sh
+export INNGEST_SIGNING_KEY=signkey-… INNGEST_EVENT_KEY=…
+REACTION_TTL=60s pnpm day 12 --cloud
+pnpm send 12 experiment-40 --cloud
+```
 
-One Dev Server quirk: in the run list, a `create-card` run can still show as running after it has
-finished. The run detail is right; trust that.
+`--cloud` skips the Dev Server and connects the app to Inngest Cloud with `connect()` over an
+outbound WebSocket, so your laptop needs no public URL. The ledger wall stays on localhost.
+
+Locally, http://localhost:8288 shows the forty `score-recipient-reaction` runs: each one starts
+from `inngest/deferred.schedule`, waits on `wait-for-reaction`, and completes when its reaction
+arrives. One beta quirk: once a deferred score lands, the Dev Server shows the parent
+`create-card` run as Running with an empty trace. The run did finish, and the card was delivered.
+
+The ledger wall at http://localhost:3012 has **Request card c1**, **c1: Loved it** and **c1: Meh**
+buttons, so you can play the recipient yourself. React after the card is delivered.
 
 ## In your app
 
-Name the outcome first (a click, a reply, a resolved ticket), then emit an event when it happens,
-however late. Wrap the one decision you're testing in `group.experiment`, with each variant doing
-real step work, and `defer` a scorer that waits for that event. Ship the winner by switching to
-`experiment.fixed`.
+Pick the outcome before the experiment: a click, a reply, a resolved ticket. Score it where it
+happens with `step.score()`, or later with a scorer and `defer()`. Pass `experimentRef` whenever a
+score should count toward a variant, and keep experiment and score names stable, because changing
+a name starts a new metric.
 
 ## Next
 
-That's the twelfth day. The bonus day asks what to do when the agent writes code: where does it
-run? It needs Inngest Cloud, so read its heads-up first.
+That's twelve days. Next up: putting all twelve together in one app.

@@ -1,9 +1,9 @@
-# Day 10: Why do my paying customers wait behind free users?
+# Day 10: Why are paying customers waiting behind the free tier?
 
 ## The problem
 
-Twenty free cards are queued up when two pro cards arrive. The queue is first come, first served,
-so the people paying you go out last.
+When the queue backs up, everyone waits their turn. A customer on the paid plan sends a card and
+watches it sit behind twenty free-tier cards that arrived a moment earlier.
 
 ## Break it
 
@@ -12,16 +12,16 @@ IMAGE_RATE=off pnpm day 10
 pnpm send 10 pro-arrives-late-before
 ```
 
-Only two cards run at a time, so a queue forms. Watch the `[mail]` lines: free `f…` deliveries,
-then `p1` and `p2` at the very end. `IMAGE_RATE=off` keeps the fake image rate limit out of the
-way; leave it set for the fixed scenario too.
+`IMAGE_RATE=off` turns off the image service's rate limit (Day 07), so only the queue matters.
 
-Both scenarios take about 33 seconds, because 22 cards run two at a time.
+Twenty free cards fill the queue (`concurrency: { limit: 2 }` keeps it from draining instantly).
+Two pro cards arrive two seconds later. Watch the `[mail]` lines: `p1` and `p2` are delivered
+last.
 
 ## Fix it
 
-Give each run a priority. The expression is evaluated per run from the triggering event and
-returns seconds: pro runs are treated as if they had been queued two minutes earlier.
+Give pro runs a priority. The expression returns seconds: a pro run is scheduled as if it had
+arrived up to 120 seconds earlier, so it jumps ahead of free runs queued in that window.
 
 ```ts
 concurrency: { limit: 2 },
@@ -32,24 +32,25 @@ priority: { run: "event.data.plan == 'pro' ? 120 : 0" },
 pnpm send 10 pro-arrives-late
 ```
 
-`p1` and `p2` arrive after the free cards but are delivered among the first few. Free cards keep
-their order and still finish.
+`p1` and `p2` are among the first few cards delivered, while the free cards keep going in order.
 
 ## Watch it
 
-In http://localhost:8288, filter runs by `create-card`. Most free runs are queued, and as soon as a
-slot opens the pro runs start ahead of them.
+In http://localhost:8288, filter runs by `create-card`. The pro runs start as soon as a slot opens,
+ahead of free runs that were queued before them.
 
-Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its
-problem/fix switch matches `pro-arrives-late-before` and `pro-arrives-late`.
+The ledger wall at http://localhost:3010 lists deliveries in order. Find `p1` and `p2` at the end,
+then near the start.
 
 ## In your app
 
-Priority only matters when something is queued, so pair it with a concurrency limit. Values range
-from -600 to 600 seconds, and priority can't be combined with batching. To give each plan its own
-queue instead, key queues are the alternative: see the priority vs key queues explainer video.
-Key queues currently require Enterprise access, so they aren't part of this demo.
+Priority only reorders work that is waiting, so it matters when a concurrency limit or throttle
+makes a queue form. It goes from -600 to 600 seconds. Use positive values to boost: a negative
+value delays a run even when the queue is empty. Key queues are the next step up, separating
+tenants into their own queues. That's an Enterprise feature, so it's covered in the explainer
+video rather than this demo.
+<!-- TODO(human): link the priority vs key queues explainer video. -->
 
 ## Next
 
-Tomorrow's problem: we're paying for 120 database writes that could be three.
+Some work is cheap per item and expensive per call. Tomorrow we bundle it.

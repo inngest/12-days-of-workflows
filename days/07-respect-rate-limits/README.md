@@ -1,64 +1,64 @@
-# Day 07: Why do my retries make the rate limit worse?
+# Day 07: Why are my retries making the rate limiting worse?
 
 ## The problem
 
-The image API allows a handful of calls per period. Fifteen cards at once blow straight through
-it, and every 429 is a retry that lands on the same busy provider.
+The image provider allows 5 calls every 10 seconds. A burst of cards fires every render at once,
+most of them bounce off with a 429, and the retries pile onto the same wall.
 
 ## Break it
 
 ```sh
-IMAGE_RATE=5/3s pnpm day 07   # the provider allows 5 calls per 3 seconds
+pnpm day 07
 pnpm send 07 burst-before
 ```
 
-Watch the `[image]` lines: five calls get through, ten are rate limited, then the retries come
-back and some are rejected again. Everything is eventually delivered, but only after a wall of
-wasted calls.
+Fifteen cards arrive at once. Watch the `[image]` lines: about five render, and the rest
+get `rate limited, free in … ms`. Every one of those is a wasted call, and each will retry later on
+the normal backoff, only to compete with whatever else is rendering.
 
-The numbers are tuned for video: the provider allows 5 calls per 3 seconds and the throttle is
-3 per 3 seconds, so the demo finishes in about 15 seconds. The throttle sits below the limit
-because Inngest lets one extra start through at the front of a window, and 3 keeps every window
-under 5. The fake also asks Inngest to retry after one second, where normal backoff would spread
-the retries over minutes.
+Before the fix, stop `pnpm day 07` and start it again. The leftover retries would otherwise land
+in the middle of the next scenario.
 
 ## Fix it
 
-Add `throttle` to the function that makes the image call, set just under the provider's limit.
-Because `render-card-image` is the function from Day 03, one run start is exactly one image call.
+Throttle the function that calls the provider. Day 03 already gave rendering its own function, so
+one run start means one image call. Set the throttle a little under the provider's limit: run
+starts and the provider's own clock never line up exactly, and the headroom absorbs the difference.
 
 ```ts
-throttle: { limit: 3, period: "3s" },
+export const renderCardImage = inngest.createFunction(
+  {
+    id: "render-card-image",
+    retries: 10,
+    triggers: [invokedWithText],
+    throttle: { limit: 4, period: "10s" },
+  },
+  async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),
+);
 ```
 
 ```sh
 pnpm send 07 burst
 ```
 
-Cards still arrive all at once, but renders start about three every three seconds, queued by
-Inngest. Every image call succeeds on its first try, and no run fails or retries.
+Throttled runs wait in a queue instead of failing. Renders start a few at a time and every card is
+delivered in about half a minute.
 
 ## Watch it
 
-In http://localhost:8288, open the `render-card-image` runs. They don't fail and retry; they wait
-in the queue and then start, one after another. Compare with `create-card-before`, where the
-steps keep failing with 429.
+In http://localhost:8288, all fifteen `create-card` runs start right away and sit on their
+`render-image` step. The `render-card-image` runs start in small groups, spread over the window.
 
-Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its
-problem/fix switch matches `burst-before` and `burst`.
+The ledger wall at http://localhost:3007 counts image renders against 429s: a wall of red before,
+zero after.
 
 ## In your app
 
-Set the throttle just under the provider's documented limit, and put it on the function that
-makes the call, so one run start equals one API call. Add a `key` to throttle per customer or API
-key.
-
-Concurrency and throttling are different dials. Day 06's `concurrency` limits how many runs are
-in flight at the same moment, however slowly they finish. `throttle` limits how many runs start
-per period, however quickly each one finishes. A provider that counts calls per time window needs
-the throttle. A resource that counts simultaneous work needs concurrency. Throttling limits run
-starts, not steps, which is why the throttled step lives in its own function.
+Throttling limits how many runs **start** per period. Day 06's concurrency limits how many run
+**at once**. Use throttle when the provider counts requests over time, and concurrency when it
+counts open connections or your own capacity. Throttle counts run starts, not steps, so put it on
+a function that makes one provider call per run. Add a `key` to throttle per customer API key.
 
 ## Next
 
-Tomorrow's problem: users smash the regenerate button and we pay for every click.
+Some work shouldn't run once per event at all. Tomorrow the user types and we wait for them to stop.

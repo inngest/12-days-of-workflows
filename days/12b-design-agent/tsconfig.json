@@ -1,13 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "dist",
-    "types": ["node"],
     "composite": false,
     "declaration": false,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node"]
   },
-  "include": ["src", "send.ts"],
-  "references": [{ "path": "../../packages/shared" }]
+  "include": ["src", "send.ts"]
 }

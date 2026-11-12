@@ -23,7 +23,7 @@ parent waits for the child's result as if it were a step.
 
 ```ts
 export const renderCardImage = inngest.createFunction(
-  { id: "render-card-image", retries: 10, triggers: [imageRequested] },
+  { id: "render-card-image", retries: 10, triggers: [invokedWithText] },
   async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),
 );
 
@@ -33,7 +33,7 @@ const image = await step.invoke("render-image", {
 });
 ```
 
-`imageRequested` is `invoke(staticSchema<{ text: string }>())` in `events.ts`. It marks the
+`invokedWithText` is `invoke(staticSchema<{ text: string }>())` in `events.ts`. It marks the
 function as invoke-only and types `event.data` for both sides of the call.
 
 ```sh
@@ -48,7 +48,8 @@ sixth try. The LLM still bills once.
 http://localhost:8288 shows two runs: `create-card` sits on its `render-image` step while the
 `render-card-image` run retries. Click through from the parent's step to the child run.
 
-Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its problem/fix switch matches the `-before` scenario and the fixed one.
+The ledger wall at http://localhost:3003 counts the image failures and shows whether the card was
+delivered.
 
 ## In your app
 
@@ -58,4 +59,4 @@ function in another app), never a string id.
 
 ## Next
 
-Tomorrow's problem: I need a human to say yes before this goes out.
+Not every wait is a retry. Tomorrow the card waits for a human to say yes.

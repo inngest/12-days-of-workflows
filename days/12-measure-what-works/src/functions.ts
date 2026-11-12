@@ -6,18 +6,18 @@ import { inngest } from "./client.js";
 import { cardReacted, cardRequested } from "./events.js";
 
 // TODO: A scorer that waits for the recipient's reaction
-export const reactionScorer = createScorer(inngest, { id: "score-recipient-reaction", schema: z.object({ cardId: z.string() }) }, async () => null);
 
 export const createCard = inngest.createFunction(
   { id: "create-card", triggers: [cardRequested] },
   async ({ event, step, group, defer }) => {
     // TODO: Split traffic between two prompt variants
-    const card = await step.run("write-text", () => writeCard(event.data));
+    const result = await step.run("write-text", () => writeCard(event.data));
     const variant = "classic";
     // TODO: Score now what you know now; defer what you learn later
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
     return { variant };
   },
 );
 
-export const functions = [createCard, reactionScorer];
+// TODO: Register the scorer
+export const functions = [createCard];

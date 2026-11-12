@@ -4,5 +4,5 @@ import { sandboxMiddleware, scoreMiddleware } from "inngest/experimental";
 
 export const inngest = new Inngest({
   id: "day-12b",
-  middleware: [chaosMiddleware, scoreMiddleware(), sandboxMiddleware()],
+  middleware: [chaosMiddleware, sandboxMiddleware(), scoreMiddleware()],
 });

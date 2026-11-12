@@ -42,7 +42,7 @@ Full task spec: SPEC.md.
 - `pnpm starters` — regenerates the `starter` branch
 - `pnpm lint`
 
-## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0` for Days 01-11, `^4.21.1` for Days 12 and 12b)
+## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0`)
 - Never write v3 syntax. If an example you recall has a second
   trigger argument to createFunction, it is v3.
 - Triggers live in the options object: `{ id, triggers: [...] }`.
@@ -64,11 +64,11 @@ Full task spec: SPEC.md.
 - Days import only from `inngest` and `@12days/shared`. Never from another day.
 - Never change `@12days/shared` to make one day work. If a day needs a new
   fake behavior, propose the contract change and stop.
-- Fakes are deterministic: seeded RNG only, no network.
+- Fakes are deterministic: seeded RNG only, no network unless `USE_REAL_LLM=1`.
 - At most one comment per Inngest concept in `functions.ts`.
   Explanations go in the day's README.
 - Allowed dependencies: inngest, express, @types/express, tsx, typescript,
-  vitest, @biomejs/biome, zod (Days 12 and 12b only). Anything else: stop and ask.
+  vitest, @biomejs/biome, zod (Day 12 only). Anything else: stop and ask.
 
 ## On camera
 - Every day is a short video episode, so every scenario a README tells viewers
@@ -139,6 +139,8 @@ pnpm 9 workspace, Node 22, ESM, strict TypeScript. Root scripts are thin `tsx` w
 4. Prefix each process's output (`[app]`, `[dev]`) and kill both on SIGINT.
 5. `pnpm day all` starts all 12 apps and one Dev Server with twelve `-u` flags, for the finale.
 
+**Cloud mode.** `pnpm day NN --cloud` starts only the app, with `USE_CONNECT=1` and no `INNGEST_DEV`; `startServer` then calls `connect()` from `inngest/connect` instead of mounting `serve()`, so Inngest Cloud reaches a laptop over an outbound WebSocket. The ledger and wall routes stay local. `pnpm send NN [scenario] --cloud` sends with the event key instead of to the Dev Server. Both exit with a hint unless `INNGEST_SIGNING_KEY` (day) and `INNGEST_EVENT_KEY` are set. `pnpm check` always uses the Dev Server.
+
 **`scripts/send.ts` behavior:** imports `days/NN-*/send.ts`, runs the named scenario (default `happy`) with `INNGEST_DEV=1`, and prints the sent event ids. Unknown scenario names exit 1 and list the valid ones.
 
 ## packages/shared contract
@@ -155,17 +157,9 @@ export class ProviderError extends Error {
 export type WriteCardInput = { prompt: string; cardId?: string; tone?: string; variant?: string };
 export type CardText = { text: string; tokens: number; costUsd: number };
 export function writeCard(input: WriteCardInput): Promise<CardText>;
-// Day 12b: an agent "writes the card as code". Deterministic; honors chaos and the ledger like writeCard
-// (op "writeCardCode", meta.variant, meta.broken). `code` reads a global `message` (the sandbox `input`)
-// and ends with `return { svg }`; about 25% of cardIds (seeded) get broken code (throws or syntax error).
-export type WriteCardCodeInput = { prompt: string; variant: string; cardId: string };
-export type CardCode = { code: string; tokens: number; costUsd: number };
-export function writeCardCode(input: WriteCardCodeInput): Promise<CardCode>;
 
-// fakes/image.ts — 1–3 s seeded latency; global limit IMAGE_RATE
-// (default 5 calls per 10 s), above it throws ProviderError(429, msUntilFree);
-// if chaos.image.retryInMs is set, it throws RetryAfterError(…, max(retryInMs, msUntilFree)) instead,
-// with the ProviderError as `cause` (Phase 4)
+// fakes/image.ts — 1–3 s seeded latency; global token bucket IMAGE_RATE
+// (default 5/10s: burst of 5, then 1 call per 2 s), above it throws ProviderError(429, msUntilFree)
 export function renderImage(input: { text: string }): Promise<{ url: string }>;
 
 // fakes/mail.ts — console only
@@ -195,10 +189,7 @@ export type ChaosSpec = {
   afterCalls?: number;   // …after letting this many succeed (default 0)
   status?: 429 | 500;
   retryAfterMs?: number;
-  retryInMs?: number;    // throw RetryAfterError instead, so retries land ~1 s apart (Phase 3b).
-                         // On `image` it also applies to the rate limit's own 429s (Phase 4): the retry waits
-                         // for the free slot (never less than retryInMs). `{ failTimes: 0, retryInMs: 1000 }`
-                         // makes only the rate limit quick.
+  retryInMs?: number;    // throw RetryAfterError instead, so retries land ~1 s apart (Phase 3b)
 };
 export type Chaos = { llm?: ChaosSpec; image?: ChaosSpec; mail?: ChaosSpec };
 export const chaosMiddleware: /* v4 middleware */ unknown;
@@ -223,6 +214,45 @@ export function startServer(opts: {
 **Server.** `startServer` mounts `serve()` at `/api/inngest` with `express.json({ limit: "1mb" })`, plus two test-only routes: `GET /__ledger` returns `entries()` and `DELETE /__ledger` calls `reset()`. `pnpm check` uses them to assert on side effects.
 
 **Logging.** Every fake logs one line per call in the form `[llm] writeCard c1 billed $0.004 (call #2)`. These lines are on camera, so keep the format exact.
+
+### Ledger wall
+
+A shared, on-camera view of the ledger, so the counts each lesson turns on (bills, 429s, duplicate deliveries, writes) read from across the room instead of from terminal log lines. Approved after Phase 4 as a `@12days/shared` contract change.
+
+```ts
+// serve.ts — startServer gains one optional field; index.ts stays a single call
+export type WallAction =
+  | { kind: "button"; label: string; event: string; data: Record<string, unknown> }
+  | { kind: "text"; label: string; event: string; data: Record<string, unknown>; field: string }; // sends on every keystroke
+
+export function startServer(opts: {
+  client: Inngest; functions: InngestFunction.Any[]; port?: number;
+  wall?: { actions?: WallAction[] };
+}): void;
+```
+
+- **`GET /`** serves one static page, `wall/index.html`, with the Hearth Post design system's CSS (tokens plus component classes, `wall/hearth.css`) served at `GET /wall.css`. Inline JS, no framework, no build step, no new dependencies. It polls `GET /__ledger` every 500 ms and follows the system's light or dark setting.
+- **`fn` ledger field.** `LedgerEntry` gains `fn?: string`, the id of the function whose run made the call (the chaos middleware stores it in `AsyncLocalStorage` next to `cardId`; `record()` stamps it). Entries whose `fn` ends in `-before` are the Broken run, everything else is Fixed. Existing fields and the fake log-line format are unchanged.
+- **`GET /__wall`** returns `{ appId, title, actions }`. The title is the day's README heading (the app runs from its day folder), and the level comes from the day number.
+- **Every screen** has a DayHeader (level color, plain-language title, Broken or Fixed badge), a Before / After / Side by side switch, the day's wall actions, and Reset. Auto mode shows the run that started most recently; the switch pins a side. Each side ends in a one-line verdict, and nothing relies on colour alone (glyphs, hatching, words).
+- **Bespoke screens, Days 01, 02, 03, 06, 07, 08, 09 and 11.**
+  - Day 01: card preview plus "LLM billed N×", with a cost meter. Broken: 3× with hatched repeat bills. Fixed: 1× and dashed "saved" ticks.
+  - Day 06: Maisie's queue spot (`b1`'s delivery position, of 21), grouped account rows and lanes. Broken: about #21. Fixed: about #3.
+  - Day 07: a grid of image calls with a big "Rate limited" count. Broken: a wall of 429 tiles. Fixed: all ✓, 0.
+  - Day 02: card preview, a Timeline and an LLM-calls stat. Fixed (`grinch`): Rejected stamp, "No retries" on the failed moderation step, a "Sender notified" toast, 0 LLM calls. A small secondary panel shows the `llm-429` beat: the gap between the failed call and its retry (about 5 s). Broken: the `-before` run makes no ledger calls, so this side stays on its empty state (see BUILD_LOG).
+  - Day 03: card preview, a "Painting tries" stat and a Timeline. Broken: 5 tries, "Gave up on the artwork", card art hatched, nothing delivered. Fixed: the separate function keeps going, the 6th try paints, the card is Sent.
+  - Day 08: card preview, "LLM calls" stat and a cost meter, one tick per billed call. Broken: 8 ticks. Fixed: "Waiting for quiet" while the wall's own text box is being typed into (the page counts the edits it sends, since the ledger can't see debounced ones), then one tick, with dashed "saved" ticks for the edits it skipped.
+  - Day 09: a call grid of recipients in order of arrival, with "Got it twice", "Delivered", "Retried" and "Sends made" stats. Broken: 24 hatched ×2 tiles. Fixed: 50 ✓ and one ↻.
+  - Day 11: "Warehouse writes" stat plus a cost meter, one small tick per write at a flat $0.002 (a constant in the page, since the warehouse ledger entry carries rows, not dollars). Broken: 120 ticks, $0.240. Fixed: three wide batch tiles (×50, ×50, ×20), $0.006.
+- **Every other day** (04, 05, 10, 12 and 12b) falls back to a generic Hearth Post view: counts for LLM calls, image renders, cards sent and warehouse writes as stat panels, plus the delivery order as chips (duplicates and failures flagged). The same Before / After split applies.
+- **Reset** calls `DELETE /__ledger`, so presenters can clear the wall between "break it" and "fix it".
+- **`POST /__event`** sends `{ name, data }` through the day's own client, accepting only event names listed in `wall.actions`. Actions render as buttons or text boxes beside the switch.
+- **Actions, three days only**, where a person is the trigger:
+  - Day 04: buttons "Request card c1" → `card/requested` and "Approve c1" → `card/approved { cardId: "c1" }`
+  - Day 08: text boxes "Card message" → `card/edited` and "Card message (no debounce)" → `card/edited.before`, each `{ cardId: "c1", prompt }` on every keystroke
+  - Day 12: buttons "Love it" / "Meh" per card → `card/reacted`
+- **Not lesson code.** No `@lesson` markers, no budget, identical on `starter` and `main`. Scenarios in `send.ts` remain the tests; `pnpm check` asserts `GET /` serves the page and `/__wall` reports the right day (`PASS NN ledger-wall`). Every README's "Watch it" ends with one line on what the wall shows.
+- **Design hooks.** Colors and type are the design system's tokens in `wall/hearth.css`, including the four level colors from the Notion tech spec. Every day shows its level color and title.
 
 ## Day folder contract
 
@@ -529,7 +559,7 @@ Problem: one account sends a burst of cards and everyone else's single card wait
 | `noisy-neighbor` | `IMAGE_RATE=off` | 20 cards from account `a`, then `b1` from account `b` 2 s later | all Completed within 60 s; custom: `b1` among the first 6 deliveries |
 | `noisy-neighbor-before` | `IMAGE_RATE=off` | same, to `.before` (no key) | custom: `b1` delivered 13th or later (measured: 19th of 21) |
 
-`CardRequest` gains `accountId: string` from this day on. `IMAGE_RATE=off` keeps the image fake's rate limit out of the way until Day 7.
+`CardRequest` gains `accountId: string` for this day. `IMAGE_RATE=off` keeps the image fake's rate limit out of the way until Day 7.
 
 ```ts
 export const createCard = inngest.createFunction(
@@ -567,8 +597,8 @@ export const renderCardImage = inngest.createFunction(
   {
     id: "render-card-image",
     retries: 10,
-    // @lesson:start Start at most 5 renders per 10 seconds
-    throttle: { limit: 5, period: "10s" },
+    // @lesson:start Start at most 4 renders per 10 seconds, just under the provider's 5
+    throttle: { limit: 4, period: "10s" }, // 5 flaked ~1 run in 3: the Dev Server sometimes starts 6 at once
     // @lesson:end
   },
   async ({ event, step }) =>
@@ -610,23 +640,23 @@ Problem: sending one card to 50 recipients in a single loop means one failure re
 
 | Scenario | Sends | Expect |
 | --- | --- | --- |
-| `bulk-50` | one `card/bulk-send` with 50 recipients; `chaos.mail: { afterCalls: 24, failTimes: 1 }` | `bulk-send` Completed; `deliver-card` Completed, count 50; `mail.sendCard` 51 calls, 0 duplicate recipients |
+| `bulk-50` | one `card/bulk-send` with 50 recipients; `chaos.mail: { afterCalls: 24, failTimes: 1 }` | `send-to-everyone` Completed; `deliver-card` Completed, count 50; `mail.sendCard` 51 calls, 0 duplicate recipients |
 | `bulk-50-before` | same, to `.before` (loop inside one step) | custom: ≥ 20 recipients delivered twice |
 
 `before.ts` is the loop-vs-step anti-pattern from the customer call: one `step.run` wrapping the whole `for` loop. The README should name it as such.
 
 ```ts
-export const cardDeliver = eventType("card/deliver", {
+export const deliveryRequested = eventType("card/delivery.requested", {
   schema: staticSchema<{ cardId: string; to: string }>(),
 });
 
-export const bulkSend = inngest.createFunction(
-  { id: "bulk-send", triggers: [cardBulkSend] },
+export const sendToEveryone = inngest.createFunction(
+  { id: "send-to-everyone", triggers: [cardBulkSend] },
   async ({ event, step }) => {
     // @lesson:start Fan out: one event per recipient
     await step.sendEvent(
       "fan-out",
-      event.data.recipients.map((to) => cardDeliver.create({ cardId: event.data.cardId, to }))
+      event.data.recipients.map((to) => deliveryRequested.create({ cardId: event.data.cardId, to }))
     );
     // @lesson:end
     return { queued: event.data.recipients.length };
@@ -635,7 +665,7 @@ export const bulkSend = inngest.createFunction(
 
 // @lesson:start Each delivery is its own run with its own retries
 export const deliverCard = inngest.createFunction(
-  { id: "deliver-card", triggers: [cardDeliver] },
+  { id: "deliver-card", triggers: [deliveryRequested] },
   async ({ event, step }) =>
     step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }))
 );
@@ -714,7 +744,7 @@ Problem: you changed the card prompt and have no idea whether recipients like it
 | --- | --- | --- | --- |
 | `experiment-40` | `REACTION_TTL=60s` | 40 cards; once the ledger shows 40 `writeCard` calls, one `card/reacted` per card with `loved = simulateReaction(cardId, variant)` | `create-card` Completed, count 40; `score-recipient-reaction` Completed, count 40; custom: each variant served ≥ 10 times |
 
-No `before.ts`: the “before” is shipping a prompt change blind, told in the README. Requires `inngest@^4.21.1`; scoring and deferred scoring are beta APIs ([Agent Evals quick start](https://www.inngest.com/docs/agent-evals/quick-start.md)).
+No `before.ts`: the “before” is shipping a prompt change blind, told in the README. Requires `inngest@^4.8.0`; scoring and deferred scoring are beta APIs ([Agent Evals quick start](https://www.inngest.com/docs/agent-evals/quick-start.md)).
 
 ```ts
 // client.ts
@@ -771,6 +801,19 @@ export const functions = [createCard, reactionScorer];
 
 Verify: the full `group.experiment()`, `defer()` and `createScorer()` signatures against the [Agent Evals reference](https://www.inngest.com/docs/agent-evals/reference.md). The starter's stub leaves `variant` undefined; fix with a second stub line if the return breaks typecheck.
 
+### Day 12b — `12b-design-agent` (budget 35)
+
+Problem: an AI agent designs each card as code, and that code has to run somewhere safe. Cut B of Day 12; folder `12b-design-agent`, port 3112 (`pnpm day 12b`).
+
+| Scenario | Env | Sends | Expect |
+| --- | --- | --- | --- |
+| `design-1` | `REACTION_TTL=60s` | card c1, whose first design always breaks | `designCard` called twice (design + revision), one delivery |
+| `design-12` | `REACTION_TTL=60s` | 12 cards, then one `card/reacted` per card | 12 `score-recipient-reaction` runs Completed, 12 deliveries |
+
+The agent is the shared fake `designCard()` (seeded per card and variant; "bold" breaks more often than "classic"). It returns a Node program that prints the card as SVG; the sandbox runs it with `node -e`, no browser. Uses `sandboxMiddleware()` and `scoreMiddleware()` from `inngest/experimental` (`inngest@^4.21.1`) and `step.sandbox.create`, `sandbox.commands.run` and `sandbox.destroy`. `step.score()` has no `experiment` option, so the render score is `inngest.score.experiment()`.
+
+Sandboxes are an open beta on Inngest Cloud (Pro and up); the local Dev Server only uses them after `inngest login`. The day exports `requiresCloudSandboxes = true` from `send.ts`, and `pnpm check` prints SKIP for its scenarios while still running the lesson-budget check and the typecheck (`NO_EMIT_PROJECTS`, like Day 12). The scenarios' `expect` blocks are untested until run with a login.
+
 ## Build order
 
 Six phases, one Claude Code session each. A phase is done only when its gate command passes; report failures instead of working around them.
@@ -805,13 +848,30 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 
 **Phase 4: Days 07–11.** Gate: `pnpm check 07 08 09 10 11`
 
-- [ ] Same rules as Phase 3
+- [x] Same rules as Phase 3
+- [x] Starter fix: Days 03, 05 and 09 wrap `export const functions` in a lesson region with a stub, so the starter typechecks when a whole function is the lesson
 
-**Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters`
+**Phase 4b: ledger wall.** Gate: `pnpm check` (all days), including each day's `ledger-wall` line
 
-- [ ] Day 12 on `inngest@^4.21.1` with `scoreMiddleware`
-- [ ] Re-read every README against the template; every “Break it” command must match a scenario name
-- [ ] Print a table of lesson-line counts versus budgets for human review
+- [x] `wall.html`, `GET /`, `GET /__wall`, `POST /__event` and the `wall` option per "Ledger wall" above
+- [x] Actions for Days 04 and 08 (Day 12's land with Phase 5); one "Watch it" line per README
+
+**Phase 5: Day 12 and final pass.** Gate: `pnpm check` (all days) and `pnpm starters` (passed: 55/55 checks, starter typechecks)
+
+- [x] Day 12 on `inngest@^4.8.0` with `scoreMiddleware` (`pnpm check 12` passes in ~6 s; see "Day 12 surface")
+- [x] Re-read every README against the template; every “Break it” command must match a scenario name (all 12 pass: title, six headings, two-sentence problem with no feature names, every `pnpm send` names a real scenario)
+- [x] Print a table of lesson-line counts versus budgets for human review
+
+  | Day | Lines / budget | Day | Lines / budget | Day | Lines / budget |
+  | --- | --- | --- | --- | --- | --- |
+  | 01 | 3 / 15 | 05 | 10 / 25 | 09 | 10 / 20 |
+  | 02 | 9 / 25 | 06 | 1 / 5 | 10 | 1 / 5 |
+  | 03 | 9 / 15 | 07 | 1 / 5 | 11 | 8 / 10 |
+  | 04 | 9 / 15 | 08 | 1 / 5 | 12 | 32 / 35 |
+
+**Day 12 Cut B.** `12b-design-agent` is built on top of Phase 5 (Cloud sandboxes, so it is checked statically only; see "Day 12b" above).
+
+**Readability sweep (after Phase 5).** Reference code above is the original target shape. The days have since been simplified for the screen: `sendCard(event.data)`, Day 04 has a `before.ts` and an `approve-before` scenario with a 15 s TTL, Day 05's event is `card/scheduled`, Day 07 throttles at 4 per 10 s, Day 09 uses `card/delivery.requested` and `send-to-everyone`, Days 03/07 call the invoke trigger `invokedWithText`, and Day 12's scorer uses `match`. The code and READMEs are the source of truth; BUILD_LOG has the reasons.
 
 ## Stop and ask
 
@@ -821,10 +881,14 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 
 - [x] **Retry backoff timing.** Phase 1 records how long the Dev Server takes to exhaust 2, 4 and 6 failures. If the `-before` scenarios take over 2 minutes, decide between lowering `retries` in `before.ts` and accepting a slower check. Measured values (Phase 1, Dev Server 1.49.0, default `retries: 4`, retry gaps ~25–30 s, ~45 s, ~75–85 s, ~150 s with jitter): **2 failures → Completed after ~80–105 s; 4 failures → Completed after ~305 s; 6 failures → Failed (retries exhausted) after ~295 s.** Day 01's two-failure scenarios fit in a 120 s `settleMs`; Day 03's `very-flaky-image-before` (4 retries exhausted) needs ~5 min. Phase 3 (Day 03, step-level failures): image attempts at ~4, 39, 93, 167, 309 s after send; the sixth succeeds at ~611 s and the default-retries run fails at ~324 s. Decision: Day 03 uses `failTimes: 5` (settle 720 s / 420 s) instead of 6 (~20+ min). Superseded in Phase 3b by `retryInMs` (see Snappy scenarios).
 - [ ] **Run lookups.** If the Dev Server has no function-level runs query, decide whether ledger-only assertions are enough for invoked, fan-out and `onFailure` runs.
-- [ ] **Day 12 surface.** Confirm whether the Dev Server shows experiment variants and scores, or whether the Day 12 demo needs Inngest Cloud (and therefore a signing key in the demo flow).
+- [x] **Day 12 surface.** Answered in Phase 5 (Dev Server 1.49): its Experiments and Scores pages say "The Dev Server doesn't display experiments/scores yet" and point to Inngest Cloud, so the comparison needs Cloud and a signing key in the demo flow. Two beta quirks to report upstream: once a deferred score lands, the Dev Server reports the parent run as Running and its run view is empty (the run did finish); and the TS SDK's `ScoreStepTool` type isn't exported, so a declaration-emitting (composite) project can't build a client with `scoreMiddleware()` (TS2883). Day 12 typechecks with `--noEmit` outside `tsc -b` (`NO_EMIT_PROJECTS` in `scripts/lib.ts`), and its scenario checks `create-card` through the ledger. **Decided: record Day 12 against Cloud** via `--cloud` (Inngest Connect, verified end to end against the Dev Server's Connect gateway; not yet against Cloud itself, which needs the shoot's keys).
 - [ ] **Plan gating.** Priority, batching (`maxSize: 50` versus plan batch limits) and Agent Evals need a check against the pricing and packaging decision before Days 10–12 publish.
 - [ ] **Contest template.** Days run locally on Express; contest entries need a live deploy link. Decide whether a separate Vercel-ready template is in scope.
+- [ ] **Ledger wall redesign (after Phase 5).** The first version reads as generic service panels. Revisit once all 12 days exist, choosing between three mocked directions: (A) before and after columns that both stay on screen, with Break it / Fix it buttons that run the scenarios; (B) one hero number per day as a plain-language outcome, with the "before" as a struck-out ghost; (C) a timeline of calls per run for timing-driven days (07, 08, 10). Each day will need a small wall config naming its hero metric.
+- [x] **Ledger wall (added after Phase 4).** Approved and built in Phase 4b. Still open: whether presenters show it beside the Dev Server, and whether the designer themes it (tokens at the top of `wall.html`) before the shoot.
 - [ ] **Finale.** `finale/` stays an empty scaffold until the livestream build is specced.
+- [x] **Throttle vs. the image fake (added Phase 4).** Day 07 `burst` got four 429s: the Dev Server's throttle starts a small burst, then one run every 2 s, while the image fake counted any 10 s sliding window. **Resolved:** the fake is now a token bucket (5 tokens, one back every 2 s), which is how Inngest's throttle and many real providers count. Lesson code unchanged; `burst` passes in ~24 s with zero 429s.
+- [ ] **Day 07 `burst-before` timing.** The 429 wall shows within seconds, so the scenario asserts only that (settle 15 s). Its retries use real backoff and finish minutes later; the check cancels them. Confirm that's acceptable on camera, or have the fake's 429 carry `retryInMs`.
 - [x] **Snappy scenarios (added Phase 3).** The "On camera" rule wants every README scenario visibly done in under 60 s. Built days that break it today (measured): Day 01 `flaky-image` and `flaky-image-before` ~80–105 s (two default-backoff retries); Day 03 `very-flaky-image` ~10 min and `very-flaky-image-before` ~5.5 min (five failures). The Dev Server's retry backoff (~35 s, 55 s, 75 s, 140 s, 300 s gaps) is the bottleneck and isn't configurable from the SDK, so fixing these means fewer failures, a chaos status that maps to `RetryAfterError`, or cutting the shot in editing. Day 06 (~60 s for 21 cards) is borderline. **Resolved (Phase 3b):** `ChaosSpec.retryInMs` makes chaos failures throw `RetryAfterError`, so the Dev Server retries after ~1 s. Lesson code and failure counts are unchanged. Measured: Day 01 `flaky-image`/`-before` 10 s; Day 03 `very-flaky-image` 20 s, `-before` 16 s. READMEs note that real backoff takes minutes. Day 06 `noisy-neighbor` measured 37 s in the full gate, so it no longer counts as borderline.
 
 **Always stop for**

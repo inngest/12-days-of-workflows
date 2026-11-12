@@ -3,70 +3,76 @@ import type { Inngest } from "inngest";
 
 export const lessonBudget = 5;
 
-const edit = (cardId: string, n: number) => ({
-  cardId,
-  prompt: `${cardId} draft ${n}`,
-});
+const MESSAGE = "Merry Christmas from all of us";
+const GAP_MS = 300;
 
-/** 8 edits per card, 300 ms apart. With several cards, their edits interleave. */
-async function sendTyping(
+/** The prompt after each of 8 edits, growing toward the full message; the last is complete. */
+const drafts = Array.from({ length: 8 }, (_, i) =>
+  MESSAGE.slice(0, Math.ceil((MESSAGE.length * (i + 1)) / 8)),
+);
+
+/** Sends one edit event per draft, GAP_MS apart, alternating cards when given several. */
+async function typeDrafts(
   inngest: Inngest,
   sleep: (ms: number) => Promise<void>,
   name: string,
   cardIds: string[],
 ): Promise<string[]> {
   const ids: string[] = [];
-  for (let n = 1; n <= 8; n++) {
+  for (const prompt of drafts) {
     for (const cardId of cardIds) {
-      const sent = await inngest.send({ name, data: edit(cardId, n) });
+      const sent = await inngest.send({ name, data: { cardId, prompt } });
       ids.push(...sent.ids);
+      await sleep(GAP_MS);
     }
-    if (n < 8) await sleep(300);
   }
   return ids;
 }
 
-function llmCalls(ledger: LedgerEntry[]): LedgerEntry[] {
-  return ledger.filter((e) => e.provider === "llm" && e.op === "writeCard" && e.ok);
-}
+const llmCalls = (ledger: LedgerEntry[]) =>
+  ledger.filter((e) => e.provider === "llm" && e.op === "writeCard");
 
-/** Null if every card's LLM call used its 8th (latest) edit. */
-function usedLatestEdit(ledger: LedgerEntry[], cardIds: string[]): string | null {
-  const prompts = llmCalls(ledger).map((e) => e.meta?.prompt);
+/** null if every card's only LLM call used that card's final draft. */
+function usedLatestPrompt(ledger: LedgerEntry[], cardIds: string[]): string | null {
   for (const cardId of cardIds) {
-    if (!prompts.includes(`${cardId} draft 8`)) return `${cardId}: expected "${cardId} draft 8"`;
+    const prompts = llmCalls(ledger)
+      .filter((e) => e.cardId === cardId)
+      .map((e) => e.meta?.prompt);
+    if (prompts.length !== 1 || prompts[0] !== MESSAGE) {
+      return `${cardId}: expected one call with "${MESSAGE}", saw ${JSON.stringify(prompts)}`;
+    }
   }
   return null;
 }
 
 export const scenarios: Record<string, Scenario> = {
   "typing-burst": {
-    description: "8 edits to one card in ~2 s: one LLM call, using the latest text",
-    send: ({ inngest, sleep }) => sendTyping(inngest, sleep, "card/edited", ["c1"]),
+    description: "8 edits to c1, 300 ms apart: one preview, from the last edit",
+    send: ({ inngest, sleep }) => typeDrafts(inngest, sleep, "card/edited", ["c1"]),
     expect: {
-      settleMs: 30_000,
+      settleMs: 20_000,
       runs: [{ fn: "regenerate-preview", status: "Completed", count: 1 }],
       ledger: { "llm.writeCard": 1 },
-      custom: (ledger) => usedLatestEdit(ledger, ["c1"]),
+      custom: (ledger) => usedLatestPrompt(ledger, ["c1"]),
     },
   },
   "typing-burst-before": {
-    description: "Same burst with no debounce: 8 runs, 8 LLM calls",
-    send: ({ inngest, sleep }) => sendTyping(inngest, sleep, "card/edited.before", ["c1"]),
+    description: "Same edits with no debounce: 8 runs, 8 LLM bills",
+    send: ({ inngest, sleep }) => typeDrafts(inngest, sleep, "card/edited.before", ["c1"]),
     expect: {
-      settleMs: 30_000,
+      settleMs: 20_000,
       runs: [{ fn: "regenerate-preview-before", status: "Completed", count: 8 }],
       ledger: { "llm.writeCard": 8 },
     },
   },
   "two-cards": {
-    description: "Interleaved bursts for c1 and c2: each card settles on its own",
-    send: ({ inngest, sleep }) => sendTyping(inngest, sleep, "card/edited", ["c1", "c2"]),
+    description: "Interleaved edits to c1 and c2: one preview per card",
+    send: ({ inngest, sleep }) => typeDrafts(inngest, sleep, "card/edited", ["c1", "c2"]),
     expect: {
-      settleMs: 30_000,
+      settleMs: 25_000,
       runs: [{ fn: "regenerate-preview", status: "Completed", count: 2 }],
       ledger: { "llm.writeCard": 2 },
-      custom: (ledger) => usedLatestEdit(ledger, ["c1", "c2"]),
+      custom: (ledger) => usedLatestPrompt(ledger, ["c1", "c2"]),
     },
   },
 };

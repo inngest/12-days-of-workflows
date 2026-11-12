@@ -1,9 +1,9 @@
-# Day 09: How do I send a card to everyone without sending it twice?
+# Day 09: Why did half my list get the card twice?
 
 ## The problem
 
-One card, 50 recipients, one loop. Recipient 25 hits a mail failure, the step retries, and the
-loop starts over from recipient 1. The first 24 people get the card twice.
+Sending one card to 50 people is a loop. When delivery #25 fails and the job retries, it starts
+the loop again, and the first 24 people get the card a second time.
 
 ## Break it
 
@@ -12,28 +12,24 @@ pnpm day 09
 pnpm send 09 bulk-50-before
 ```
 
-This is the loop-in-one-step anti-pattern: a single `step.run()` wraps the whole `for` loop, so
-Inngest can only retry the whole loop. Watch the terminal: `guest1@example.com` through
-`guest24@example.com` are delivered, then delivered again. The fake mailer asks for a retry after
-one second, so this takes seconds. Normal backoff would spread it over minutes.
+`send-to-everyone-before` wraps the whole `for` loop in a single `step.run`. This is the loop-inside-a-step
+anti-pattern: a step is the unit of retry, so one failed send retries all 50. Watch the `[mail]`
+lines: `friend1` through `friend24` are delivered twice. The fake mailer asks Inngest to retry
+after one second, so the demo is quick. Normal backoff would wait longer.
 
 ## Fix it
 
-Fan out. The parent sends one event per recipient with `step.sendEvent()`, and a second function,
-`deliver-card`, handles each event in its own run.
+Fan out. The parent sends one event per recipient, and a second function delivers each one in its
+own run, with its own retries.
 
 ```ts
-await step.sendEvent(
-  "send-deliveries",
-  event.data.recipients.map((to) => cardDeliver.create({ cardId: event.data.cardId, to })),
-);
-```
+const { cardId, recipients } = event.data;
+const deliveries = recipients.map((to) => deliveryRequested.create({ cardId, to }));
+await step.sendEvent("fan-out", deliveries);
 
-```ts
 export const deliverCard = inngest.createFunction(
-  { id: "deliver-card", triggers: [cardDeliver] },
-  async ({ event, step }) =>
-    step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId })),
+  { id: "deliver-card", triggers: [deliveryRequested] },
+  async ({ event, step }) => step.run("deliver", () => sendCard(event.data)),
 );
 ```
 
@@ -41,23 +37,23 @@ export const deliverCard = inngest.createFunction(
 pnpm send 09 bulk-50
 ```
 
-Same failure at recipient 25, but now it only fails one tiny run. That run retries by itself and
-the other 49 are untouched: 51 mail calls in total, nobody twice.
+Fifty `deliver-card` runs. Only the failed delivery retries, and every recipient gets exactly one card.
 
 ## Watch it
 
-http://localhost:8288 shows one `bulk-send` run and 50 `deliver-card` runs. Find the one with two
-attempts on its `deliver` step.
+In http://localhost:8288 `send-to-everyone` finishes almost immediately with `{ queued: 50 }`. Fifty
+`deliver-card` runs fan out beside it. One shows a failed attempt and a retry.
 
-Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its
-problem/fix switch matches `bulk-50-before` and `bulk-50`.
+The ledger wall at http://localhost:3009 shows all 50 deliveries in order, with anyone who got the
+card twice in red.
 
 ## In your app
 
-Whenever you loop over a list and each item has a side effect, make each item its own run. If the
-parent needs the results back, call `step.invoke()` for each recipient inside `Promise.all()`
-instead (see Day 03). Use `step.sendEvent()` when the parent doesn't need to wait.
+One step per side effect: never put a loop of side effects inside one `step.run`. If the parent
+needs every child's result, use `step.invoke()` per recipient inside `Promise.all` instead (Day 03).
+Fan-out runs in parallel, so pair it with concurrency or throttling (Days 06–07) for providers
+with limits. Checkpointing, on by default in v4, keeps runs with many steps fast without any changes.
 
 ## Next
 
-Tomorrow's problem: paying customers are stuck behind free-tier traffic.
+The queue is moving now. Tomorrow we decide who gets to go first.

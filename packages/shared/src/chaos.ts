@@ -8,30 +8,30 @@ export type ChaosSpec = {
   afterCalls?: number; // …after letting this many succeed (default 0)
   status?: 429 | 500;
   retryAfterMs?: number;
-  retryInMs?: number; // ask Inngest to retry after this many ms (keeps demos fast). On `image`, this also covers the rate limit's own 429s (use failTimes: 0 for rate limit only)
+  retryInMs?: number; // ask Inngest to retry after this many ms (keeps demos fast)
 };
 
 export type Chaos = { llm?: ChaosSpec; image?: ChaosSpec; mail?: ChaosSpec };
 
-type RunStore = { cardId?: string; chaos?: Chaos };
+type RunStore = { cardId?: string; chaos?: Chaos; fn?: string };
 
 const runStore = new AsyncLocalStorage<RunStore>();
 
-function storeFrom(ctx: Middleware.WrapFunctionHandlerArgs["ctx"]): RunStore {
-  const data = (ctx.event?.data ?? {}) as RunStore;
-  return { cardId: data.cardId, chaos: data.chaos };
+function storeFrom(args: Middleware.WrapFunctionHandlerArgs): RunStore {
+  const data = (args.ctx.event?.data ?? {}) as RunStore;
+  return { cardId: data.cardId, chaos: data.chaos, fn: args.fn.id() };
 }
 
-/** Puts `event.data.chaos` and `event.data.cardId` where every fake can read them. */
+/** Puts `event.data.chaos`, `event.data.cardId` and the function id where every fake can read them. */
 export const chaosMiddleware = class ChaosMiddleware extends Middleware.BaseMiddleware {
   readonly id = "12days-chaos";
 
-  wrapFunctionHandler({ ctx, next }: Middleware.WrapFunctionHandlerArgs) {
-    return runStore.run(storeFrom(ctx), () => next());
+  wrapFunctionHandler(args: Middleware.WrapFunctionHandlerArgs) {
+    return runStore.run(storeFrom(args), () => args.next());
   }
 
-  wrapStepHandler({ ctx, next }: Middleware.WrapStepHandlerArgs) {
-    return runStore.run(storeFrom(ctx), () => next());
+  wrapStepHandler(args: Middleware.WrapStepHandlerArgs) {
+    return runStore.run(storeFrom(args), () => args.next());
   }
 
   // Child runs (step.invoke, step.sendEvent) inherit this run's cardId and chaos.
@@ -60,10 +60,9 @@ export function currentCardId(): string | undefined {
   return runStore.getStore()?.cardId;
 }
 
-/** Internal: the quick-retry delay (ms) chaos asks for on this provider, if any. */
-export function chaosRetryInMs(provider: Provider): number | undefined {
-  if (provider === "warehouse") return undefined;
-  return runStore.getStore()?.chaos?.[provider]?.retryInMs;
+/** Internal: the id of the function whose run is executing, e.g. "create-card-before". */
+export function currentFnId(): string | undefined {
+  return runStore.getStore()?.fn;
 }
 
 /**

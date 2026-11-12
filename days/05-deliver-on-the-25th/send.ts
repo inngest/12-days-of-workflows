@@ -1,11 +1,11 @@
 import type { Scenario } from "@12days/shared";
-import { type ApprovedCard, cardApproved, cardDeleted, cleanupRequested } from "./src/events.js";
+import { cardDeleted, cardScheduled, cleanupRequested, type ScheduledCard } from "./src/events.js";
 
 export const lessonBudget = 25;
 
-const approvedCard = (inMs: number): ApprovedCard => ({
+const scheduledCard = (inMs: number): ScheduledCard => ({
   cardId: "c1",
-  to: "jason@example.com",
+  to: "grandma@example.com",
   deliverAt: new Date(Date.now() + inMs).toISOString(),
 });
 
@@ -16,7 +16,7 @@ export const scenarios: Record<string, Scenario> = {
     description: "Deliver 5 seconds from now (on the 25th, in real life)",
     send: async ({ inngest }) => {
       scheduledSentAt = Date.now();
-      const { ids } = await inngest.send(cardApproved.create(approvedCard(5_000)));
+      const { ids } = await inngest.send(cardScheduled.create(scheduledCard(5_000)));
       return ids;
     },
     expect: {
@@ -35,10 +35,10 @@ export const scenarios: Record<string, Scenario> = {
   "delete-before-delivery": {
     description: "The card is deleted while the run sleeps: the run is cancelled",
     send: async ({ inngest, sleep }) => {
-      const approved = await inngest.send(cardApproved.create(approvedCard(10_000)));
+      const scheduled = await inngest.send(cardScheduled.create(scheduledCard(10_000)));
       await sleep(2_000);
       const deleted = await inngest.send(cardDeleted.create({ cardId: "c1" }));
-      return [...approved.ids, ...deleted.ids];
+      return [...scheduled.ids, ...deleted.ids];
     },
     expect: {
       settleMs: 12_000,
@@ -49,13 +49,13 @@ export const scenarios: Record<string, Scenario> = {
   "delete-before-delivery-before": {
     description: "Same deletion without cancelOn: the deleted card is delivered anyway",
     send: async ({ inngest, sleep }) => {
-      const approved = await inngest.send({
-        name: "card/approved.before",
-        data: approvedCard(10_000),
+      const scheduled = await inngest.send({
+        name: "card/scheduled.before",
+        data: scheduledCard(10_000),
       });
       await sleep(2_000);
       const deleted = await inngest.send(cardDeleted.create({ cardId: "c1" }));
-      return [...approved.ids, ...deleted.ids];
+      return [...scheduled.ids, ...deleted.ids];
     },
     expect: {
       settleMs: 12_000,

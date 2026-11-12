@@ -1,79 +1,81 @@
 import { type LedgerEntry, type Scenario, simulateReaction } from "@12days/shared";
-import { cardReacted, cardRequested } from "./src/events.js";
+import { type CardRequest, cardRequested } from "./src/events.js";
 
 export const lessonBudget = 35;
 
-const LEDGER_URL = "http://localhost:3013/__ledger";
+/** Sandboxes are Inngest Cloud only, so `pnpm check` skips this day's scenarios. */
+export const requiresCloudSandboxes = true;
 
-/** The ledger entries written since `since`, so an earlier `pnpm send` doesn't leak into this one. */
-const ledger = async (since: number) =>
-  ((await (await fetch(LEDGER_URL)).json()) as LedgerEntry[]).filter((e) => e.at >= since);
+const names = "Alex Bea Cal Dee Eli Fay Gus Hal Ivy Jo Kit Lou Max Nia Oz Pip Quin Rae Sol Tess";
 
-/** The cards the agent wrote code for. */
-const writtenCards = (entries: LedgerEntry[]) =>
-  entries.filter((e) => e.provider === "llm" && e.op === "writeCardCode" && e.ok);
+/** "Happy holidays, Alex!" Distinct text per card, so the fakes don't time every card the same. */
+const greeting = (cardId: string) => {
+  const list = names.split(" ");
+  return `Happy holidays, ${list[Number(cardId.slice(1)) % list.length]}!`;
+};
 
-/** Waits (at most 30 s) until all `count` cards are written; returns them. */
-async function waitForCards(count: number, since: number, sleep: (ms: number) => Promise<void>) {
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    const cards = writtenCards(await ledger(since));
-    if (cards.length >= count) return cards;
-    if (Date.now() > deadline) {
-      throw new Error(`Gave up waiting: only ${cards.length} of ${count} cards were written`);
-    }
-    await sleep(500);
+const card = (cardId: string): CardRequest => ({
+  cardId,
+  prompt: greeting(cardId),
+  to: `${cardId}@example.com`,
+});
+
+/** cardId → variant, read from the LLM calls the experiment made. */
+function variantsServed(ledger: LedgerEntry[]): Map<string, string> {
+  const served = new Map<string, string>();
+  for (const e of ledger) {
+    if (e.provider === "llm" && e.op === "designCard" && e.ok && e.cardId)
+      served.set(e.cardId, String(e.meta?.variant));
   }
+  return served;
 }
 
-export const scenarios: Record<string, Scenario> = {
-  "render-20": {
-    description:
-      "20 cards written as code and rendered in Cloud sandboxes; each recipient reacts (needs SANDBOX_CLOUD=1)",
-    // Sandboxes run on Inngest Cloud only, so `pnpm check` skips this unless SANDBOX_CLOUD is set.
-    requiresEnv: "SANDBOX_CLOUD",
-    // Long on purpose: a scorer can only finish within settleMs if its reaction arrived.
-    env: { REACTION_TTL: "5m" },
-    send: async ({ inngest, sleep }) => {
-      const start = Date.now();
-      const requests = Array.from({ length: 20 }, (_, i) =>
-        cardRequested.create({
-          cardId: `c${i + 1}`,
-          prompt: `Holiday card ${i + 1}`,
-          to: `c${i + 1}@example.com`,
-        }),
-      );
-      const sent = await inngest.send(requests);
+async function ledger(): Promise<LedgerEntry[]> {
+  return (await fetch("http://localhost:3112/__ledger")).json() as Promise<LedgerEntry[]>;
+}
 
-      // A reaction is missed if its scorer isn't waiting yet, so wait for the cards, give the
-      // sandboxes a few seconds to render them, then send the reactions twice. Scorers that
-      // already heard the first copy ignore the second.
-      const cards = await waitForCards(20, start, sleep);
-      const reactions = cards.map((e) =>
-        cardReacted.create({
-          cardId: String(e.cardId),
-          loved: simulateReaction(String(e.cardId), "warm"),
-        }),
+const c1 = {
+  cardId: "c1",
+  prompt: "Merry Christmas, Grandma. Thanks for the cookies!",
+  to: "grandma@example.com",
+};
+
+export const scenarios: Record<string, Scenario> = {
+  "design-1": {
+    description: "One card (c1) whose first design breaks in the sandbox; the agent revises it",
+    env: { REACTION_TTL: "60s" },
+    send: async ({ inngest }) => (await inngest.send(cardRequested.create(c1))).ids,
+    expect: {
+      settleMs: 30_000,
+      ledger: { "llm.designCard": 2, "mail.sendCard": 1 },
+    },
+  },
+  "design-12": {
+    description: "12 cards split between two designers; each scored when its recipient reacts",
+    env: { REACTION_TTL: "60s" },
+    send: async ({ inngest, sleep }) => {
+      const sent = await inngest.send(
+        Array.from({ length: 12 }, (_, i) => cardRequested.create(card(`c${i + 1}`))),
       );
-      await sleep(6_000);
+      // Reactions only count once each scorer is waiting, so wait for all 12 deliveries first.
+      let entries: LedgerEntry[] = [];
+      for (let tries = 0; tries < 120; tries++) {
+        entries = await ledger();
+        if (entries.filter((e) => e.provider === "mail" && e.ok).length >= 12) break;
+        await sleep(500);
+      }
+      await sleep(2_000);
+      const reactions = [...variantsServed(entries)].map(([cardId, variant]) => ({
+        name: "card/reacted",
+        data: { cardId, loved: simulateReaction(cardId, variant) },
+      }));
       const reacted = await inngest.send(reactions);
-      await sleep(3_000);
-      const again = await inngest.send(reactions);
-      return [...sent.ids, ...reacted.ids, ...again.ids];
+      return [...sent.ids, ...reacted.ids];
     },
     expect: {
-      settleMs: 50_000,
-      runs: [
-        { fn: "create-card", status: "Completed", count: 20 },
-        { fn: "score-recipient-reaction", status: "Completed", count: 20 },
-      ],
-      ledger: { "llm.writeCardCode": 20 },
-      custom: (entries) => {
-        const broken = writtenCards(entries).filter((e) => e.meta?.broken).length;
-        return broken > 0 && broken < 20
-          ? null
-          : `some, but not all, cards should be broken code, got ${broken} of 20`;
-      },
+      settleMs: 60_000,
+      runs: [{ fn: "score-recipient-reaction", status: "Completed", count: 12 }],
+      ledger: { "mail.sendCard": 12 },
     },
   },
 };

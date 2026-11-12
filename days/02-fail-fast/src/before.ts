@@ -17,7 +17,7 @@ export const createCardBefore = inngest.createFunction(
     });
     const card = await step.run("write-text", () => writeCard(event.data));
     const image = await step.run("render-image", () => renderImage({ text: card.text }));
-    await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
+    await step.run("deliver", () => sendCard(event.data));
     return { text: card.text, image: image.url };
   },
 );

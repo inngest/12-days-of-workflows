@@ -11,13 +11,13 @@ import {
   LESSON_FILES,
   listDays,
   loadDay,
+  NO_EMIT_PROJECTS,
   ROOT,
   resolveDay,
   sleep,
   startApp,
   startDevServer,
   stop,
-  typecheckStandaloneDays,
   waitFor,
 } from "./lib.js";
 
@@ -80,18 +80,6 @@ type RunsPage = {
   };
 };
 
-/**
- * The runs list can keep saying RUNNING for a finished run (seen with Day 12's deferred
- * scorers), so a RUNNING row is confirmed against the single-run query.
- */
-async function runStatus(id: string): Promise<string> {
-  const { run } = await gql<{ run: { status: string } | null }>(
-    "query Run($id: String!) { run(runID: $id) { status } }",
-    { id },
-  );
-  return run?.status ?? "RUNNING"; // the run vanished: keep what the list said, never throw
-}
-
 /** Every run queued since `from`, across all functions (incl. invoked and fan-out children). */
 async function runsSince(from: string): Promise<Run[]> {
   const runs: Run[] = [];
@@ -101,7 +89,7 @@ async function runsSince(from: string): Promise<Run[]> {
     for (const { node } of page.runs.edges) {
       runs.push({
         id: node.id,
-        status: node.status === "RUNNING" ? await runStatus(node.id) : node.status,
+        status: node.status,
         slug: node.function.slug,
         output: undefined,
       });
@@ -116,12 +104,17 @@ async function runsSince(from: string): Promise<Run[]> {
  * stores it as ops, e.g. `[{"op":"RunComplete","data":{...}}]`; unwrap to the returned value.
  */
 async function runOutput(id: string): Promise<unknown> {
-  const { run } = await gql<{ run: { output: string | null } }>(
+  // A just-queued run can be listed before it's stored; treat that as "no output yet".
+  const result = await gql<{ run: { output: string | null } }>(
     "query Run($id: String!) { run(runID: $id) { output } }",
     { id },
-  );
-  if (!run.output) return null;
-  const parsed: unknown = JSON.parse(run.output);
+  ).catch((err: Error) => {
+    if (err.message.includes("no rows")) return null;
+    throw err;
+  });
+  const output = result?.run.output;
+  if (!output) return null;
+  const parsed: unknown = JSON.parse(output);
   const op = Array.isArray(parsed) ? parsed.find((o) => o?.op === "RunComplete") : undefined;
   return op ? op.data : parsed;
 }
@@ -137,10 +130,12 @@ const STATUS: Record<string, RunStatus> = {
 async function cancelUnfinished(from: string) {
   for (const run of await runsSince(from)) {
     if (STATUS[run.status] === "Running") {
-      // A run can finish between the list and the cancel; that's fine.
+      // A run can finish between listing and cancelling; that's fine.
       await gql("mutation Cancel($id: ULID!) { cancelRun(runID: $id) { id } }", {
         id: run.id,
-      }).catch(() => {});
+      }).catch((err: Error) => {
+        if (!err.message.includes("ended run")) throw err;
+      });
     }
   }
 }
@@ -311,6 +306,18 @@ async function evaluateScenario(
   return assertScenario(scenario.expect, harness.appId, await harness.ledger(), runs);
 }
 
+// ---------- Ledger wall ----------
+
+/** The on-camera page loads and knows which day it's showing. null = pass. */
+async function checkWall(day: Day): Promise<string | null> {
+  const base = `http://localhost:${day.port}`;
+  const page = await fetch(base);
+  if (!page.ok || !(await page.text()).includes("/__ledger"))
+    return `GET / returned ${page.status}`;
+  const config = (await (await fetch(`${base}/__wall`)).json()) as { title: string };
+  return config.title.startsWith(`Day ${day.nn}:`) ? null : `wall title "${config.title}"`;
+}
+
 // ---------- Main ----------
 
 async function checkDay(day: Day): Promise<boolean> {
@@ -322,6 +329,11 @@ async function checkDay(day: Day): Promise<boolean> {
   console.log(`${overBudget ? "FAIL" : "PASS"} ${day.nn} lesson-budget ${budget}`);
   if (overBudget) ok = false;
 
+  if (mod.requiresCloudSandboxes) {
+    console.log(`SKIP ${day.nn} needs Inngest Cloud sandboxes (run with inngest login)`);
+    return ok;
+  }
+
   const harness = new DayHarness(day, inngest.id);
   const onSigint = async () => {
     await harness.stop();
@@ -330,11 +342,10 @@ async function checkDay(day: Day): Promise<boolean> {
   process.once("SIGINT", onSigint);
   try {
     await harness.start();
+    const wall = await checkWall(day);
+    console.log(`${wall ? "FAIL" : "PASS"} ${day.nn} ledger-wall${wall ? `\n     ${wall}` : ""}`);
+    if (wall) ok = false;
     for (const [name, scenario] of Object.entries(mod.scenarios)) {
-      if (scenario.requiresEnv && !process.env[scenario.requiresEnv]) {
-        console.log(`SKIP ${day.nn} ${name} (set ${scenario.requiresEnv}=1, see the day's README)`);
-        continue;
-      }
       const started = Date.now();
       const failures = await runScenario(harness, inngest, scenario).catch((err: Error) => [
         `error: ${err.message}`,
@@ -358,9 +369,8 @@ const selected = process.argv.slice(2);
 const days = (selected.length ? selected : listDays().map(dayId)).map(resolveDay);
 
 runStep("tsc -b", join(ROOT, "node_modules/.bin/tsc"), ["-b"]);
-if (!typecheckStandaloneDays(ROOT)) {
-  console.error("FAIL tsc --noEmit (standalone days)");
-  process.exit(1);
+for (const project of NO_EMIT_PROJECTS) {
+  runStep(`tsc ${project}`, join(ROOT, "node_modules/.bin/tsc"), ["--noEmit", "-p", project]);
 }
 runStep("biome check", join(ROOT, "node_modules/.bin/biome"), ["check", "."]);
 

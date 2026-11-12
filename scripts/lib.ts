@@ -1,5 +1,5 @@
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { type ChildProcess, spawn } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Scenario } from "@12days/shared";
@@ -8,56 +8,36 @@ import type { Inngest } from "inngest";
 export const ROOT = join(import.meta.dirname, "..");
 export const DEV_SERVER = "http://localhost:8288";
 
-/** Day NN runs on 30NN; a bonus day "12b" takes the next free port (3013). */
-function dayPort(nn: string): number {
-  return 3000 + Number.parseInt(nn, 10) + (/[a-z]$/.test(nn) ? 1 : 0);
-}
+/**
+ * Projects outside the `tsc -b` graph, typechecked with `tsc --noEmit -p`. Day 12's scoring types
+ * reference an SDK type that isn't exported, so a composite (declaration-emitting) build can't
+ * name them.
+ */
+export const NO_EMIT_PROJECTS = ["days/12-measure-what-works", "days/12b-design-agent"];
 
 export type Day = { nn: string; dir: string; port: number };
 
-/** Day folders look like `01-slug`, or `12b-slug` for a bonus day. */
+/** Folders look like `01-survive-failure` or `12b-design-agent`. */
 export function listDays(): string[] {
   return readdirSync(join(ROOT, "days"))
     .filter((name) => /^\d\d[a-z]?-/.test(name))
     .sort();
 }
 
-/** The "NN" or "NNb" prefix of a day folder name. */
-export const dayId = (name: string) => name.split("-")[0];
+/** "12b-design-agent" → "12b". */
+export const dayId = (folder: string) => folder.split("-")[0];
 
-/**
- * Days that can't be tsc project references (`composite: false`, see Day 12), so they get
- * their own `tsc --noEmit` step. Add a folder name here to include a new one.
- */
-export const STANDALONE_DAYS = ["12-measure-what-works", "12b-design-agent"];
-
-/** The Holiday Card Studio imports scripts/lib.ts, so it is not a project reference either. */
-const STANDALONE_PROJECTS = [...STANDALONE_DAYS.map((name) => `days/${name}`), "studio"];
-
-/** Typechecks the standalone days and the studio under `root`. Returns false on the first failure. */
-export function typecheckStandaloneDays(root: string): boolean {
-  for (const project of STANDALONE_PROJECTS) {
-    if (!existsSync(join(root, project))) continue;
-    console.log(`> tsc --noEmit ${project}`);
-    const tsc = join(root, "node_modules/.bin/tsc");
-    const result = spawnSync(tsc, ["--noEmit", "-p", project], {
-      cwd: root,
-      stdio: "inherit",
-    });
-    if (result.status !== 0) return false;
-  }
-  return true;
-}
-
-/** Resolves "1" or "01" to its `days/01-*` folder, or exits listing the days that exist. */
+/** Resolves "1", "01" or "12b" to its `days/01-*` folder, or exits listing the days that exist. */
 export function resolveDay(input: string): Day {
   const nn = input.padStart(2, "0");
-  const matches = listDays().filter((name) => dayId(name) === nn);
+  const matches = listDays().filter((name) => name.startsWith(`${nn}-`));
   if (matches.length !== 1) {
     console.error(`No single day matches "${input}". Days:\n  ${listDays().join("\n  ")}`);
     process.exit(1);
   }
-  return { nn, dir: join(ROOT, "days", matches[0]), port: dayPort(nn) };
+  // Day 12b runs on 3112, so it never clashes with Day 12 on 3012.
+  const port = 3000 + Number.parseInt(nn, 10) + (/[a-z]$/.test(nn) ? 100 : 0);
+  return { nn, dir: join(ROOT, "days", matches[0]), port };
 }
 
 /** Spawns a process in its own group, prefixing each output line with `[label]`. */
@@ -92,12 +72,14 @@ type OutputOpts = { onLine?: (line: string) => void };
 
 export function startApp(
   day: Day,
-  opts: OutputOpts & { watch?: boolean; env?: Record<string, string> } = {},
+  opts: OutputOpts & { watch?: boolean; cloud?: boolean; env?: Record<string, string> } = {},
 ) {
   const args = opts.watch ? ["watch", "src/index.ts"] : ["src/index.ts"];
+  // Cloud mode leaves INNGEST_DEV unset, so the SDK uses INNGEST_SIGNING_KEY from the env.
+  const mode: Record<string, string> = opts.cloud ? { USE_CONNECT: "1" } : { INNGEST_DEV: "1" };
   return spawnPrefixed("app", join(ROOT, "node_modules/.bin/tsx"), args, {
     cwd: day.dir,
-    env: { ...opts.env, PORT: String(day.port), INNGEST_DEV: "1" },
+    env: { ...opts.env, PORT: String(day.port), ...mode },
     onLine: opts.onLine,
   });
 }
@@ -126,6 +108,14 @@ export function stop(child: ChildProcess): Promise<void> {
   });
 }
 
+/** Exits with a hint unless every named env var is set. Cloud mode needs real Inngest keys. */
+export function requireEnv(names: string[]) {
+  const missing = names.filter((name) => !process.env[name]);
+  if (missing.length === 0) return;
+  console.error(`--cloud needs ${missing.join(" and ")} set (from your Inngest environment).`);
+  process.exit(1);
+}
+
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export async function waitFor(what: string, ready: () => Promise<boolean>, timeoutMs = 60_000) {
@@ -137,7 +127,11 @@ export async function waitFor(what: string, ready: () => Promise<boolean>, timeo
   throw new Error(`Timed out after ${timeoutMs} ms waiting for ${what}`);
 }
 
-export type DayModule = { lessonBudget: number; scenarios: Record<string, Scenario> };
+export type DayModule = {
+  lessonBudget: number;
+  scenarios: Record<string, Scenario>;
+  requiresCloudSandboxes?: boolean; // `pnpm check` skips the scenarios of days that set this
+};
 
 /** Imports a day's client and its `send.ts`. Callers set INNGEST_DEV=1 first. */
 export async function loadDay(day: Day): Promise<{ inngest: Inngest; mod: DayModule }> {

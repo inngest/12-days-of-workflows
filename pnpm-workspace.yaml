@@ -1,1 +1,1 @@
-packages: ["packages/*", "days/*", "finale", "studio"]
+packages: ["packages/*", "days/*", "finale"]
