@@ -257,8 +257,14 @@ function sideHtml(name, which, snap) {
 }
 
 function drawCompare(s) {
-  const show = s.profile.hasContrast;
+  const show = s.profile.hasContrast && presenter;
   $("compare").hidden = !show;
+  // The slim product status bar and the presenter's strip share the bottom edge: one at a time.
+  $("statusbar").hidden = presenter && s.profile.hasContrast;
+  setHtml(
+    $("statusbar"),
+    (s.live?.status ?? ["Connected"]).map((t) => `<span>${esc(t)}</span>`).join(""),
+  );
   if (!show) return;
   setHtml(
     $("compare"),
@@ -383,7 +389,10 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "d") setDevPanel($("devpanel").hidden);
   if (e.key === "p") {
     presenter = !presenter;
-    if (state) drawDrawer(state);
+    if (state) {
+      drawDrawer(state);
+      drawCompare(state);
+    }
   }
 });
 

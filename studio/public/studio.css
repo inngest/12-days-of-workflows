@@ -213,3 +213,21 @@
     transform: translateY(100%);
   }
 }
+
+/* The status bar: a slim row pinned to the bottom, like a real app's. Presenters get the strip instead. */
+.statusbar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-small);
+  color: var(--ink-soft);
+}
+.statusbar[hidden] {
+  display: none;
+}

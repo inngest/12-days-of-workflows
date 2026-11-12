@@ -149,3 +149,4 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Partial results read plainly too: Day 09 says "Could not deliver to 1 of 50 people. 49 delivered." and Day 12 counts "28 of 40 recipients loved it".
 - One real drift surfaced: the Day 07 trace label said "3 painter calls per 3 seconds" but the code throttles 4 per 10 seconds. The label now matches the code.
 - Day 12b's profile pointed at `create-card` and step ids the day never uses, so its feed could never have worked. It now follows `design-card`; it is cloud-only, so that one is untested.
+- The bottom strip is now a real status bar: "Connected · 1 card in progress · 3 cards delivered · Last delivery 2:14 pm", with day-specific lines like "1 card needs your approval" or "120 card opens recorded". The lesson figures ("Billed twice", retries, duplicates) didn't go anywhere: they are the same strip, shown only in presenter mode (press `p`), so the videos still get their payoff.

@@ -28,7 +28,7 @@ import {
 } from "./feed.js";
 import { fetchLedger, type LedgerSummary, summarize } from "./ledger.js";
 import { FIELDS, type Field, type FieldId, PROFILES, type Profile } from "./profiles.js";
-import { type Figure, factsOf, proofOf, stampOf } from "./proof.js";
+import { type Figure, factsOf, proofOf, stampOf, statusOf } from "./proof.js";
 
 const PORT = Number(process.env.STUDIO_PORT ?? 3100);
 
@@ -81,6 +81,7 @@ type Live = {
   feed: FeedLine[];
   card: { title: string; message: string; to: string } | null;
   stamp: string | null;
+  status: string[]; // the status bar: calm product facts, never lesson figures
   action: string | null; // the label of a button that fits this moment, if any
 };
 
@@ -246,6 +247,11 @@ async function readState(wanted: string | undefined): Promise<State> {
       : [],
     card: started ? cardOf(profile, tracked, summary) : null,
     stamp,
+    status: statusOf(active.nn, facts, {
+      entries,
+      connected: state.devServer,
+      inProgress: mainFn.filter((r) => r.status === "running").length,
+    }),
     action,
   };
   if (focus)
