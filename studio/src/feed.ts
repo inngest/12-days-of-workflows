@@ -15,7 +15,7 @@ type Group = { id: string; fn: string; op: string; views: StepView[] };
 
 /**
  * One line per step. When many runs share a step (a rush of cards) the line counts them:
- * "Artwork painted · all 15". `mains` are the functions whose steps are listed; steps of any
+ * "Your artwork is ready · all 15". `mains` are the functions whose steps are listed; steps of any
  * other function only matter through `childStep`, whose retries show up on the invoke line.
  */
 export function feedLines(
@@ -52,16 +52,59 @@ export function feedLines(
         .flatMap((r) => r.steps.filter((s) => s.name === childStep))
     : [];
 
-  const lines = [...groups.values()].map((group) => lineOf(group, tracked, childViews));
+  // Child runs that have not started a step yet are waiting for a turn (a throttle, a free lane).
+  const queuedChildren = childStep
+    ? runs.filter((r) => !mains.includes(r.fn) && r.status === "running" && r.steps.length === 0)
+        .length
+    : 0;
+  const lines = [...groups.values()].map((group) =>
+    lineOf(group, tracked, childViews, queuedChildren, entries),
+  );
+  const expired = tracked.some((r) => outputOf(r).status === "expired");
   if (stillGoing) {
     for (const id of plan) {
       if (!groups.has(id)) lines.push({ id, status: "pending", text: say(id, "doing") });
+    }
+  } else if (
+    expired ||
+    tracked.some((r) => r.status === "failed" || r.status === "cancelled") ||
+    lines.some((l) => l.status === "failed")
+  ) {
+    // The card stopped for good: steps it never reached are listed as not done, never hidden.
+    for (const id of plan) {
+      if (!groups.has(id)) lines.push({ id, status: "pending", text: say(id, "skipped") });
     }
   }
   return lines;
 }
 
-function lineOf(group: Group, tracked: RunView[], childViews: StepView[]): FeedLine {
+/** What a finished run returned, as an object (a run that returned nothing gives {}). */
+function outputOf(run: RunView): Record<string, unknown> {
+  const out = run.output;
+  return out && typeof out === "object" ? (out as Record<string, unknown>) : {};
+}
+
+/** "Dec 25, 9:00 AM", or just the time when the date is today. */
+function when(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const time = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: date.getSeconds() === 0 ? undefined : "2-digit",
+  });
+  if (date.toDateString() === new Date().toDateString()) return `today at ${time}`;
+  const day = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${day} at ${time}`;
+}
+
+function lineOf(
+  group: Group,
+  tracked: RunView[],
+  childViews: StepView[],
+  queuedChildren: number,
+  entries: LedgerEntry[],
+): FeedLine {
   // How many runs this line is about. A step only some runs take (a variant) counts those runs
   // once the function has finished; until then every run might still get there.
   const ofFn = tracked.filter((r) => r.fn === group.fn);
@@ -85,7 +128,8 @@ function lineOf(group: Group, tracked: RunView[], childViews: StepView[]): FeedL
   }
 
   const cancelled = group.views.some((v) => v.note === "cancelled");
-  if (cancelled) return { id: group.id, status: "done", text: "Cancelled, as you asked" };
+  if (cancelled)
+    return { id: group.id, status: "done", text: "Cancelled at your request. Nothing was sent." };
 
   let status: FeedLine["status"] = "pending";
   if (retrying > 0) status = "retrying";
@@ -94,13 +138,57 @@ function lineOf(group: Group, tracked: RunView[], childViews: StepView[]): FeedL
   else if (done >= total) status = "done";
   else if (done > 0) status = "running"; // some are done, the rest are between steps
 
-  const state = status === "pending" || status === "running" ? "doing" : status;
+  const ofGroup = ofFn.filter((r) => r.steps.some((s) => s.name === group.id));
+  const waits = ["SLEEP", "WAIT_FOR_EVENT", "WAIT_FOR_SIGNAL"].includes(group.op);
+  const queued = group.op === "INVOKE" && status === "running" && queuedChildren > 0;
+  const state =
+    status === "running" && (waits || queued)
+      ? "waiting"
+      : status === "pending" || status === "running"
+        ? "doing"
+        : status;
   let text = say(group.id, state, tries);
   if (status === "done" && total === 1 && tries > 1) text += ` (after ${tries} tries)`;
+
+  // Say the reason or the result when the data has one, the way a real product would.
+  const first = ofGroup[0];
+  if (group.id === "wait-for-delivery-date" && state === "waiting" && first) {
+    const at = when(String(first.data.deliverAt ?? ""));
+    if (at) text = `Scheduled for delivery ${at}`;
+  } else if (group.id === "wait-for-approval" && status === "done") {
+    if (ofGroup.some((r) => outputOf(r).status === "expired"))
+      text = "You did not approve your card in time";
+  } else if (group.id === "wait-for-reaction" && status === "done") {
+    // A scorer that returns nothing means the wait timed out with no reaction.
+    const silent = ofGroup.filter((r) => r.output === null).length;
+    const loved = ofGroup.filter((r) => outputOf(r).value === true).length;
+    if (ofGroup.length === 1 && silent === 1) text = "No reaction came in. We stopped waiting.";
+    else if (ofGroup.length === 1 && loved === 1) text = "The recipient loved it";
+    else if (ofGroup.length > 1)
+      text = `${loved} of ${ofGroup.length} recipients loved it${silent ? `, ${silent} did not react` : ""}`;
+  } else if (group.id === "notify-sender" && status === "done") {
+    // The sender is told why: show the reason itself, not just that they were told.
+    const told = entries.filter((e) => e.provider === "mail" && e.op === "notifySender").at(-1);
+    const reason = String(told?.meta?.reason ?? "").replace(/^Rejected: /, "");
+    if (reason) text = `You were told why: ${reason}`;
+  } else if (group.id === "card-tone" && status === "done") {
+    const picked = ofGroup.map((r) => String(outputOf(r).variant ?? "")).filter(Boolean);
+    const tally = (v: string) => picked.filter((p) => p === v).length;
+    const names = [...new Set(picked)];
+    if (names.length === 1 && total === 1) text = `Style chosen: ${names[0]}`;
+    else if (names.length > 0)
+      text = `Styles chosen: ${names.map((v) => `${v} ${tally(v)}`).join(", ")}`;
+  }
+
   if (total > 1) {
-    if (status === "done") text += ` · all ${total}`;
+    const summed = text.startsWith("Styles chosen") || text.includes(" recipients loved");
+    if (status === "done") text += summed ? "" : ` · all ${total}`;
     else if (status === "retrying") text += ` · ${retrying} of ${total}`;
-    else if (status !== "pending") text += ` · ${done}/${total}`;
+    else if (status === "failed" && group.id === "deliver")
+      text = `Could not deliver to ${failed} of ${total} people. ${done} delivered.`;
+    else if (status === "failed") text += ` · ${failed} of ${total}`;
+    else if (queued) text += ` · ${queuedChildren} waiting`;
+    else if (status !== "pending") text += ` · ${done} of ${total}`;
   }
   return { id: group.id, status, text };
 }
@@ -127,7 +215,7 @@ function linesFromLedger(entries: LedgerEntry[], running: boolean): FeedLine[] {
     const map = e.ok ? oks : fails;
     map.set(step, (map.get(step) ?? 0) + 1);
     const nth = oks.get(step) ?? 1;
-    const again = step === "write-text" && nth > 1 ? ` again (bill #${nth})` : "";
+    const again = step === "write-text" && nth > 1 ? ` again (charged ${nth} times)` : "";
     lines.push({
       id: `call-${lines.length}`,
       status: e.ok ? "done" : "retrying",

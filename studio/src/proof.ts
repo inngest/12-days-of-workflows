@@ -1,3 +1,4 @@
+import type { LedgerEntry } from "@12days/shared";
 import type { RunView } from "./devserver.js";
 import type { LedgerSummary } from "./ledger.js";
 
@@ -162,4 +163,52 @@ export function stampOf(nn: string, f: Facts, problem: boolean): string | null {
   if (sentence) return sentence;
   if (over && f.retries > 0) return retriedWords(f.retries);
   return null;
+}
+
+// ---------- The status bar ----------
+
+type StatusInput = {
+  entries: LedgerEntry[];
+  connected: boolean;
+  inProgress: number; // runs of the day's main function that are still going
+};
+
+const clock = (at: number) =>
+  new Date(at)
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    .replace(" AM", " am")
+    .replace(" PM", " pm");
+
+/**
+ * What a real app's status bar would say: calm product wording, nothing about how it works.
+ * Read from the runs and the ledger only. The lesson figures above are for the presenter.
+ */
+export function statusOf(nn: string, f: Facts, input: StatusInput): string[] {
+  const items: string[] = [input.connected ? "Connected" : "Reconnecting…"];
+  if (f.runs === 0) return items;
+  const cards = (n: number) => plural(n, "card");
+  const status = (f.output as { status?: string } | null)?.status;
+  const sent = input.entries.filter((e) => e.provider === "mail" && e.op === "sendCard" && e.ok);
+  const savedRows = input.entries
+    .filter((e) => e.provider === "warehouse")
+    .reduce((sum, e) => sum + Number(e.meta?.rows ?? 0), 0);
+
+  if (nn === "04" && input.inProgress > 0) items.push("1 card needs your approval");
+  else if (nn === "05" && input.inProgress > 0) items.push("1 card scheduled for delivery");
+  else if (nn === "12" && input.inProgress > 0) items.push("Waiting for reactions");
+  else if (input.inProgress > 0) items.push(`${cards(input.inProgress)} in progress`);
+
+  if (nn === "04" && status === "expired") items.push("1 draft expired, nothing sent");
+  if (f.cancelled > 0) items.push("Delivery cancelled");
+  if (f.failed > 0) items.push(`${cards(f.failed)} could not be sent`);
+  if (nn === "08") items.push(f.running > 0 ? "Saving changes…" : "All changes saved");
+  if (nn === "04" && f.running === 0 && status !== "expired") items.push("All changes saved");
+  if (nn === "11" && savedRows > 0) items.push(`${plural(savedRows, "card open")} recorded`);
+
+  const last = sent.at(-1);
+  if (last && nn !== "11") {
+    items.push(`${cards(sent.length)} delivered`);
+    items.push(`Last delivery ${clock(last.at)}`);
+  }
+  return items;
 }

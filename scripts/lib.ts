@@ -140,6 +140,23 @@ export async function loadDay(day: Day): Promise<{ inngest: Inngest; mod: DayMod
   return { inngest: client.inngest, mod };
 }
 
+/**
+ * Env that every scenario of a day asks for (Day 06 and 10 turn the image rate limit off in all
+ * of them). `pnpm day NN` applies it, so the demo never shows retries the lesson is not about.
+ * Anything already set in the shell wins.
+ */
+export async function sharedScenarioEnv(day: Day): Promise<Record<string, string>> {
+  const mod: DayModule = await import(pathToFileURL(join(day.dir, "send.ts")).href);
+  const sets = Object.values(mod.scenarios).map((s) => s.env ?? {});
+  if (sets.length === 0) return {};
+  const shared: Record<string, string> = {};
+  for (const [key, value] of Object.entries(sets[0])) {
+    if (sets.every((env) => env[key] === value) && process.env[key] === undefined)
+      shared[key] = value;
+  }
+  return shared;
+}
+
 // ---------- @lesson markers ----------
 
 /** The only files allowed to hold @lesson regions, relative to a day folder. */
