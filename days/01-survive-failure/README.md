@@ -14,6 +14,8 @@ pnpm send 01 flaky-image-before
 
 The image service fails twice. Watch the `[app]` log: `[llm] writeCard c1 billed …` shows up
 three times (`call #1`, `#2`, `#3`), once per retry, because the whole function reruns from the top.
+The fake service asks Inngest to retry after one second, so the demo is quick. Normal backoff spreads
+retries over minutes.
 
 ## Fix it
 
@@ -42,6 +44,8 @@ Open http://localhost:8288 and click the `create-card` run. The timeline shows `
 finishing once, `render-image` failing twice with retry attempts, then succeeding, then `deliver`.
 Compare it with the `create-card-before` run, which is one opaque block retried three times.
 
+Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its problem/fix switch matches the `-before` scenario and the fixed one.
+
 ## In your app
 
 Find a handler that calls more than one external service. Move it into an Inngest function and
@@ -50,4 +54,4 @@ JSON-serializable, because Inngest stores it.
 
 ## Next
 
-Some failures will never succeed, however many times you retry. Tomorrow we stop retrying them.
+Tomorrow's problem: stop retrying things that are never going to work.

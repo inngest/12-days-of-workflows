@@ -1,4 +1,5 @@
-import { chaosFailure, currentCardId } from "../chaos.js";
+import { RetryAfterError } from "inngest";
+import { chaosFailure, chaosRetryInMs, currentCardId } from "../chaos.js";
 import { ProviderError } from "../errors.js";
 import { nextCallNumber, onReset, record } from "../ledger.js";
 import { hash, seededRandom, sleep } from "./seed.js";
@@ -43,7 +44,13 @@ export async function renderImage(input: { text: string }): Promise<{ url: strin
       meta: { status: 429 },
     });
     console.log(`${label} rate limited, free in ${msUntilFree} ms (call #${call})`);
-    throw new ProviderError(429, msUntilFree);
+    const rateLimited = new ProviderError(429, msUntilFree);
+    // With chaos.image.retryInMs, retry when the slot frees (at least retryInMs) instead of default backoff.
+    const retryInMs = chaosRetryInMs("image");
+    if (retryInMs === undefined) throw rateLimited;
+    throw new RetryAfterError(rateLimited.message, Math.max(retryInMs, msUntilFree), {
+      cause: rateLimited,
+    });
   }
 
   const seed = hash(input.text);
@@ -60,7 +67,7 @@ export async function renderImage(input: { text: string }): Promise<{ url: strin
       meta: { status: failure.status },
     });
     console.log(`${label} failed ${failure.status} (call #${call})`);
-    throw failure;
+    throw failure.error;
   }
 
   const url = `https://images.example.com/cards/${seed.toString(16)}.png`;

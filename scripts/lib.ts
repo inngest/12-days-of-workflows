@@ -1,5 +1,5 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Scenario } from "@12days/shared";
@@ -8,23 +8,56 @@ import type { Inngest } from "inngest";
 export const ROOT = join(import.meta.dirname, "..");
 export const DEV_SERVER = "http://localhost:8288";
 
+/** Day NN runs on 30NN; a bonus day "12b" takes the next free port (3013). */
+function dayPort(nn: string): number {
+  return 3000 + Number.parseInt(nn, 10) + (/[a-z]$/.test(nn) ? 1 : 0);
+}
+
 export type Day = { nn: string; dir: string; port: number };
 
+/** Day folders look like `01-slug`, or `12b-slug` for a bonus day. */
 export function listDays(): string[] {
   return readdirSync(join(ROOT, "days"))
-    .filter((name) => /^\d\d-/.test(name))
+    .filter((name) => /^\d\d[a-z]?-/.test(name))
     .sort();
+}
+
+/** The "NN" or "NNb" prefix of a day folder name. */
+export const dayId = (name: string) => name.split("-")[0];
+
+/**
+ * Days that can't be tsc project references (`composite: false`, see Day 12), so they get
+ * their own `tsc --noEmit` step. Add a folder name here to include a new one.
+ */
+export const STANDALONE_DAYS = ["12-measure-what-works", "12b-design-agent"];
+
+/** The Holiday Card Studio imports scripts/lib.ts, so it is not a project reference either. */
+const STANDALONE_PROJECTS = [...STANDALONE_DAYS.map((name) => `days/${name}`), "studio"];
+
+/** Typechecks the standalone days and the studio under `root`. Returns false on the first failure. */
+export function typecheckStandaloneDays(root: string): boolean {
+  for (const project of STANDALONE_PROJECTS) {
+    if (!existsSync(join(root, project))) continue;
+    console.log(`> tsc --noEmit ${project}`);
+    const tsc = join(root, "node_modules/.bin/tsc");
+    const result = spawnSync(tsc, ["--noEmit", "-p", project], {
+      cwd: root,
+      stdio: "inherit",
+    });
+    if (result.status !== 0) return false;
+  }
+  return true;
 }
 
 /** Resolves "1" or "01" to its `days/01-*` folder, or exits listing the days that exist. */
 export function resolveDay(input: string): Day {
   const nn = input.padStart(2, "0");
-  const matches = listDays().filter((name) => name.startsWith(`${nn}-`));
+  const matches = listDays().filter((name) => dayId(name) === nn);
   if (matches.length !== 1) {
     console.error(`No single day matches "${input}". Days:\n  ${listDays().join("\n  ")}`);
     process.exit(1);
   }
-  return { nn, dir: join(ROOT, "days", matches[0]), port: 3000 + Number(nn) };
+  return { nn, dir: join(ROOT, "days", matches[0]), port: dayPort(nn) };
 }
 
 /** Spawns a process in its own group, prefixing each output line with `[label]`. */

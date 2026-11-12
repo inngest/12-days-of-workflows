@@ -48,6 +48,14 @@ Full task spec: SPEC.md.
   surprised us, and the decisions we made. It feeds a blog post, so tell
   the story; don't dump file lists, versions or test output.
 
+## On camera
+- Every day is a short video episode, so every scenario a README tells viewers
+  to run must resolve snappily: visibly done in under 60 s, ideally under 20 s.
+- Get slow behavior (retries, sleeps, timeouts, rate windows) down to seconds
+  with scenario `env` or config. Never make the viewer sit through it.
+- Can't make a lesson's scenario that fast without changing what it teaches:
+  stop and ask.
+
 ## Docs (fetch before writing a day; LLM-friendly markdown)
 - v3→v4 changes: https://www.inngest.com/docs-markdown/reference/typescript/v4/migrations/v3-to-v4
 - Retries: https://www.inngest.com/docs-markdown/durable-execution/guides-and-advanced/error-handling/retries

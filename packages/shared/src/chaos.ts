@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { Middleware } from "inngest";
+import { Middleware, RetryAfterError } from "inngest";
 import { ProviderError } from "./errors.js";
 import type { Provider } from "./ledger.js";
 
@@ -8,6 +8,7 @@ export type ChaosSpec = {
   afterCalls?: number; // …after letting this many succeed (default 0)
   status?: 429 | 500;
   retryAfterMs?: number;
+  retryInMs?: number; // ask Inngest to retry after this many ms (keeps demos fast). On `image`, this also covers the rate limit's own 429s (use failTimes: 0 for rate limit only)
 };
 
 export type Chaos = { llm?: ChaosSpec; image?: ChaosSpec; mail?: ChaosSpec };
@@ -32,19 +33,56 @@ export const chaosMiddleware = class ChaosMiddleware extends Middleware.BaseMidd
   wrapStepHandler({ ctx, next }: Middleware.WrapStepHandlerArgs) {
     return runStore.run(storeFrom(ctx), () => next());
   }
+
+  // Child runs (step.invoke, step.sendEvent) inherit this run's cardId and chaos.
+  transformStepInput(arg: Middleware.TransformStepInputArgs) {
+    // An invoke step's input is [{ function_id, payload: { data } }].
+    const [opts, ...rest] = arg.input as [{ payload?: { data?: Record<string, unknown> } }];
+    if (arg.stepInfo.stepType !== "invoke" || !opts?.payload) return arg;
+    const payload = { ...opts.payload, data: withRunStore(opts.payload.data) };
+    return { ...arg, input: [{ ...opts, payload }, ...rest] };
+  }
+
+  transformSendEvent(arg: Middleware.TransformSendEventArgs) {
+    return { ...arg, events: arg.events.map((e) => ({ ...e, data: withRunStore(e.data) })) };
+  }
 };
+
+/** Adds the current run's cardId and chaos to child event data, unless already set. */
+function withRunStore(data: Record<string, unknown> | undefined): Record<string, unknown> {
+  const store = runStore.getStore();
+  if (!store) return data ?? {};
+  return { cardId: store.cardId, chaos: store.chaos, ...data };
+}
 
 /** Internal: the cardId of the run currently executing, if any. */
 export function currentCardId(): string | undefined {
   return runStore.getStore()?.cardId;
 }
 
-/** Internal: the error this call should fail with, or null to succeed. */
-export function chaosFailure(provider: Provider, callNumber: number): ProviderError | null {
+/** Internal: the quick-retry delay (ms) chaos asks for on this provider, if any. */
+export function chaosRetryInMs(provider: Provider): number | undefined {
+  if (provider === "warehouse") return undefined;
+  return runStore.getStore()?.chaos?.[provider]?.retryInMs;
+}
+
+/**
+ * Internal: how this call should fail, or null to succeed. With `retryInMs`, the error is a
+ * RetryAfterError so the Dev Server retries in about a second instead of minutes of backoff.
+ */
+export function chaosFailure(
+  provider: Provider,
+  callNumber: number,
+): { status: 429 | 500; error: Error } | null {
   if (provider === "warehouse") return null;
   const spec = runStore.getStore()?.chaos?.[provider];
   if (!spec) return null;
   const after = spec.afterCalls ?? 0;
   if (callNumber <= after || callNumber > after + spec.failTimes) return null;
-  return new ProviderError(spec.status ?? 500, spec.retryAfterMs);
+  const providerError = new ProviderError(spec.status ?? 500, spec.retryAfterMs);
+  if (spec.retryInMs === undefined) return { status: providerError.status, error: providerError };
+  const error = new RetryAfterError(providerError.message, spec.retryInMs, {
+    cause: providerError,
+  });
+  return { status: providerError.status, error };
 }
