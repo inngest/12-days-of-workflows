@@ -55,6 +55,8 @@ In http://localhost:8288, the `grinch` run is marked Failed after a single `mode
 a separate `create-card` failure-handler run holds the `notify-sender` step. In the `llm-429` run,
 `write-text` shows one failed attempt, then a gap of about five seconds before the retry.
 
+Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its problem/fix switch matches the `-before` scenario and the fixed one.
+
 ## In your app
 
 Find the places where you already know an error is final (validation, 4xx, "not found") and throw
@@ -63,4 +65,4 @@ Then add `onFailure` to anything a human is waiting on.
 
 ## Next
 
-One flaky dependency is still setting the retry policy for the whole card. Tomorrow we split it out.
+Tomorrow's problem: my flakiest API is setting the rules for my whole workflow.

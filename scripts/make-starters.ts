@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LESSON_FILES, listDays, ROOT, toStarter } from "./lib.js";
+import { LESSON_FILES, listDays, ROOT, toStarter, typecheckStandaloneDays } from "./lib.js";
 
 // Usage: pnpm starters [--push]
 // Rebuilds the `starter` branch from HEAD without touching the main working tree.
@@ -52,6 +52,8 @@ try {
     console.error("Starter does not typecheck. Missing a @lesson:stub?");
     throw err;
   }
+  if (!typecheckStandaloneDays(worktree))
+    throw new Error("Starter does not typecheck (standalone days)");
 
   // 3. Commit onto `starter` with plumbing, so no branch is ever checked out.
   mustGit(["add", "-A"], worktree);

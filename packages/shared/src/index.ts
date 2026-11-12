@@ -2,7 +2,14 @@ export { type Chaos, type ChaosSpec, chaosMiddleware } from "./chaos.js";
 export { ProviderError } from "./errors.js";
 export { drafts } from "./fakes/drafts.js";
 export { renderImage } from "./fakes/image.js";
-export { type CardText, type WriteCardInput, writeCard } from "./fakes/llm.js";
+export {
+  type CardCode,
+  type CardText,
+  type WriteCardCodeInput,
+  type WriteCardInput,
+  writeCard,
+  writeCardCode,
+} from "./fakes/llm.js";
 export { notifySender, sendCard } from "./fakes/mail.js";
 export { checkPrompt } from "./fakes/moderation.js";
 export { simulateReaction } from "./fakes/reactions.js";

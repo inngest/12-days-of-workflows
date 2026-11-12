@@ -38,7 +38,7 @@ pnpm send 05 delete-before-delivery
 pnpm send 05 cleanup
 ```
 
-`scheduled` delivers five seconds after it's sent. `delete-before-delivery` ends as Cancelled
+These scenarios need no environment variable. `scheduled` delivers five seconds after it's sent. `delete-before-delivery` ends as Cancelled
 with no mail. `cleanup` runs the draft cleanup without waiting for 3am.
 
 ## Watch it
@@ -46,6 +46,9 @@ with no mail. `cleanup` runs the draft cleanup without waiting for 3am.
 In http://localhost:8288 the `schedule-delivery` run shows `wait-for-delivery-date` as a sleep with
 its wake-up time. Send `card/deleted` and the run flips to Cancelled. The cleanup function lists
 both triggers, and the cron's next run time, on its function page.
+
+Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its
+problem/fix switch matches `delete-before-delivery-before` and `delete-before-delivery`.
 
 ## In your app
 
@@ -55,4 +58,4 @@ as deletion, unsubscribe or refund.
 
 ## Next
 
-So far every card has been on its own. Tomorrow one account sends twenty at once.
+Tomorrow's problem: one customer sent 20 cards and now everyone else is waiting.

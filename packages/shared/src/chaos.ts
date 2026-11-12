@@ -8,7 +8,7 @@ export type ChaosSpec = {
   afterCalls?: number; // …after letting this many succeed (default 0)
   status?: 429 | 500;
   retryAfterMs?: number;
-  retryInMs?: number; // ask Inngest to retry after this many ms (keeps demos fast)
+  retryInMs?: number; // ask Inngest to retry after this many ms (keeps demos fast). On `image`, this also covers the rate limit's own 429s (use failTimes: 0 for rate limit only)
 };
 
 export type Chaos = { llm?: ChaosSpec; image?: ChaosSpec; mail?: ChaosSpec };
@@ -58,6 +58,12 @@ function withRunStore(data: Record<string, unknown> | undefined): Record<string,
 /** Internal: the cardId of the run currently executing, if any. */
 export function currentCardId(): string | undefined {
   return runStore.getStore()?.cardId;
+}
+
+/** Internal: the quick-retry delay (ms) chaos asks for on this provider, if any. */
+export function chaosRetryInMs(provider: Provider): number | undefined {
+  if (provider === "warehouse") return undefined;
+  return runStore.getStore()?.chaos?.[provider]?.retryInMs;
 }
 
 /**

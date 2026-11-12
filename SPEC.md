@@ -155,9 +155,17 @@ export class ProviderError extends Error {
 export type WriteCardInput = { prompt: string; cardId?: string; tone?: string; variant?: string };
 export type CardText = { text: string; tokens: number; costUsd: number };
 export function writeCard(input: WriteCardInput): Promise<CardText>;
+// Day 12b: an agent "writes the card as code". Deterministic; honors chaos and the ledger like writeCard
+// (op "writeCardCode", meta.variant, meta.broken). `code` reads a global `message` (the sandbox `input`)
+// and ends with `return { svg }`; about 25% of cardIds (seeded) get broken code (throws or syntax error).
+export type WriteCardCodeInput = { prompt: string; variant: string; cardId: string };
+export type CardCode = { code: string; tokens: number; costUsd: number };
+export function writeCardCode(input: WriteCardCodeInput): Promise<CardCode>;
 
 // fakes/image.ts — 1–3 s seeded latency; global limit IMAGE_RATE
-// (default 5 calls per 10 s), above it throws ProviderError(429, msUntilFree)
+// (default 5 calls per 10 s), above it throws ProviderError(429, msUntilFree);
+// if chaos.image.retryInMs is set, it throws RetryAfterError(…, max(retryInMs, msUntilFree)) instead,
+// with the ProviderError as `cause` (Phase 4)
 export function renderImage(input: { text: string }): Promise<{ url: string }>;
 
 // fakes/mail.ts — console only
@@ -187,7 +195,10 @@ export type ChaosSpec = {
   afterCalls?: number;   // …after letting this many succeed (default 0)
   status?: 429 | 500;
   retryAfterMs?: number;
-  retryInMs?: number;    // throw RetryAfterError instead, so retries land ~1 s apart (Phase 3b)
+  retryInMs?: number;    // throw RetryAfterError instead, so retries land ~1 s apart (Phase 3b).
+                         // On `image` it also applies to the rate limit's own 429s (Phase 4): the retry waits
+                         // for the free slot (never less than retryInMs). `{ failTimes: 0, retryInMs: 1000 }`
+                         // makes only the rate limit quick.
 };
 export type Chaos = { llm?: ChaosSpec; image?: ChaosSpec; mail?: ChaosSpec };
 export const chaosMiddleware: /* v4 middleware */ unknown;

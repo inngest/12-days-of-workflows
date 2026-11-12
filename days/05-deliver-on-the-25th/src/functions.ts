@@ -19,6 +19,7 @@ export const scheduleDelivery = inngest.createFunction(
 );
 
 // @lesson:start Clean up abandoned drafts nightly, or on demand
+// @lesson:stub export const cleanupDrafts = inngest.createFunction({ id: "cleanup-drafts", triggers: [cleanupRequested] }, async () => {});
 export const cleanupDrafts = inngest.createFunction(
   {
     id: "cleanup-drafts",

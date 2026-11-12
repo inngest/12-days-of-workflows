@@ -48,6 +48,8 @@ sixth try. The LLM still bills once.
 http://localhost:8288 shows two runs: `create-card` sits on its `render-image` step while the
 `render-card-image` run retries. Click through from the parent's step to the child run.
 
+Prefer a friendlier view? `pnpm studio` (http://localhost:3100) follows this day, and its problem/fix switch matches the `-before` scenario and the fixed one.
+
 ## In your app
 
 When one dependency needs different retries, timeouts or concurrency than the rest, move it into
@@ -56,4 +58,4 @@ function in another app), never a string id.
 
 ## Next
 
-Not every wait is a retry. Tomorrow the card waits for a human to say yes.
+Tomorrow's problem: I need a human to say yes before this goes out.

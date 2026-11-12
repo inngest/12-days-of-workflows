@@ -3,6 +3,7 @@ import { inngest } from "./client.js";
 import { cardRequested, imageRequested } from "./events.js";
 
 // @lesson:start Give rendering its own function and retry policy
+// @lesson:stub export const renderCardImage = inngest.createFunction({ id: "render-card-image", triggers: [imageRequested] }, async () => ({ url: "" }));
 export const renderCardImage = inngest.createFunction(
   { id: "render-card-image", retries: 10, triggers: [imageRequested] },
   async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),

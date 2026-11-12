@@ -15,7 +15,8 @@ DRAFT_TTL=5s pnpm day 04   # a 5-second timeout instead of 48 hours
 pnpm send 04 ignore
 ```
 
-Five seconds later the draft quietly expires and nothing is sent.
+Five seconds after the draft is ready it quietly expires and nothing is sent. That is the
+timeout doing its job; the next step shows the approval side.
 
 ## Fix it
 
@@ -37,19 +38,25 @@ if (approval === null) {
 `match: "data.cardId"` means "an approval whose `data.cardId` equals this run's `data.cardId`".
 On timeout you get `null`, so the expiry path is plain code.
 
+Restart the day with a longer timeout, because a 5-second one would expire before the approval
+arrives. Stop `pnpm day 04` and run:
+
 ```sh
+DRAFT_TTL=30s pnpm day 04
 pnpm send 04 approve
 pnpm send 04 approve-wrong-card
 ```
 
-`approve` sends the card, then `card/approved` for `c1` a few seconds later, and the card is
-delivered. `approve-wrong-card` approves `c2`, so `c1` keeps waiting.
+`approve` sends the card, then `card/approved` for `c1` about six seconds later, and the card is
+delivered. `approve-wrong-card` approves `c2`, so `c1` keeps waiting until the 30 seconds run out
+and the draft expires.
 
 ## Watch it
 
-In http://localhost:8288 the `create-card` run sits on `wait-for-approval`. Send the approval and
-watch it resume straight into `deliver`. Run `ignore` and the run ends with output
-`{ "status": "expired" }` once the timeout passes.
+In http://localhost:8288 the `create-card` run sits on `wait-for-approval`. In `approve` it
+resumes straight into `deliver`. When the timeout passes (`ignore`, or `approve-wrong-card`), the
+run ends with output `{ "status": "expired" }`. The studio is not needed here: this day has no
+`-before` version, so there is no problem/fix switch.
 
 ## In your app
 
@@ -59,4 +66,4 @@ only sees events sent after it starts, so send the approval after the draft is r
 
 ## Next
 
-Waiting for a person is one kind of pause. Tomorrow we wait for a date, and cancel if plans change.
+Tomorrow's problem: send this on Christmas morning, unless they cancel.

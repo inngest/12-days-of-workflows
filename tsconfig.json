@@ -27,6 +27,21 @@
     },
     {
       "path": "days/06-one-user-per-lane"
+    },
+    {
+      "path": "days/07-respect-rate-limits"
+    },
+    {
+      "path": "days/08-wait-for-quiet"
+    },
+    {
+      "path": "days/09-send-to-everyone"
+    },
+    {
+      "path": "days/10-paid-users-first"
+    },
+    {
+      "path": "days/11-batch-the-boring-stuff"
     }
   ]
 }

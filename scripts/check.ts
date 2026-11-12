@@ -7,6 +7,7 @@ import {
   countLessonLines,
   type Day,
   DEV_SERVER,
+  dayId,
   LESSON_FILES,
   listDays,
   loadDay,
@@ -16,6 +17,7 @@ import {
   startApp,
   startDevServer,
   stop,
+  typecheckStandaloneDays,
   waitFor,
 } from "./lib.js";
 
@@ -78,6 +80,18 @@ type RunsPage = {
   };
 };
 
+/**
+ * The runs list can keep saying RUNNING for a finished run (seen with Day 12's deferred
+ * scorers), so a RUNNING row is confirmed against the single-run query.
+ */
+async function runStatus(id: string): Promise<string> {
+  const { run } = await gql<{ run: { status: string } | null }>(
+    "query Run($id: String!) { run(runID: $id) { status } }",
+    { id },
+  );
+  return run?.status ?? "RUNNING"; // the run vanished: keep what the list said, never throw
+}
+
 /** Every run queued since `from`, across all functions (incl. invoked and fan-out children). */
 async function runsSince(from: string): Promise<Run[]> {
   const runs: Run[] = [];
@@ -87,7 +101,7 @@ async function runsSince(from: string): Promise<Run[]> {
     for (const { node } of page.runs.edges) {
       runs.push({
         id: node.id,
-        status: node.status,
+        status: node.status === "RUNNING" ? await runStatus(node.id) : node.status,
         slug: node.function.slug,
         output: undefined,
       });
@@ -123,7 +137,10 @@ const STATUS: Record<string, RunStatus> = {
 async function cancelUnfinished(from: string) {
   for (const run of await runsSince(from)) {
     if (STATUS[run.status] === "Running") {
-      await gql("mutation Cancel($id: ULID!) { cancelRun(runID: $id) { id } }", { id: run.id });
+      // A run can finish between the list and the cancel; that's fine.
+      await gql("mutation Cancel($id: ULID!) { cancelRun(runID: $id) { id } }", {
+        id: run.id,
+      }).catch(() => {});
     }
   }
 }
@@ -314,6 +331,10 @@ async function checkDay(day: Day): Promise<boolean> {
   try {
     await harness.start();
     for (const [name, scenario] of Object.entries(mod.scenarios)) {
+      if (scenario.requiresEnv && !process.env[scenario.requiresEnv]) {
+        console.log(`SKIP ${day.nn} ${name} (set ${scenario.requiresEnv}=1, see the day's README)`);
+        continue;
+      }
       const started = Date.now();
       const failures = await runScenario(harness, inngest, scenario).catch((err: Error) => [
         `error: ${err.message}`,
@@ -334,9 +355,13 @@ async function checkDay(day: Day): Promise<boolean> {
 }
 
 const selected = process.argv.slice(2);
-const days = (selected.length ? selected : listDays().map((d) => d.slice(0, 2))).map(resolveDay);
+const days = (selected.length ? selected : listDays().map(dayId)).map(resolveDay);
 
 runStep("tsc -b", join(ROOT, "node_modules/.bin/tsc"), ["-b"]);
+if (!typecheckStandaloneDays(ROOT)) {
+  console.error("FAIL tsc --noEmit (standalone days)");
+  process.exit(1);
+}
 runStep("biome check", join(ROOT, "node_modules/.bin/biome"), ["check", "."]);
 
 const inUse = await fetch(DEV_SERVER).then(

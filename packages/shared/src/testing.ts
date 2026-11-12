@@ -6,6 +6,7 @@ export type RunStatus = "Completed" | "Failed" | "Cancelled" | "Running";
 export type Scenario = {
   description: string; // shown by `pnpm send NN --list`
   env?: Record<string, string>; // e.g. { DRAFT_TTL: "5s" } for check runs
+  requiresEnv?: string; // `pnpm check` skips this scenario unless the env var is set (Cloud-only features)
   send: (ctx: { inngest: Inngest; sleep: (ms: number) => Promise<void> }) => Promise<string[]>; // ids of every event sent
   expect: {
     settleMs: number; // deadline; runs expecting only finished statuses pass as soon as all hold
