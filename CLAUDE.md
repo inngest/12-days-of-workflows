@@ -12,7 +12,7 @@ Full task spec: SPEC.md.
 - `pnpm starters` — regenerates the `starter` branch
 - `pnpm lint`
 
-## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0`)
+## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0` for Days 01-11, `^4.21.1` for Days 12 and 12b)
 - Never write v3 syntax. If an example you recall has a second
   trigger argument to createFunction, it is v3.
 - Triggers live in the options object: `{ id, triggers: [...] }`.
@@ -34,11 +34,11 @@ Full task spec: SPEC.md.
 - Days import only from `inngest` and `@12days/shared`. Never from another day.
 - Never change `@12days/shared` to make one day work. If a day needs a new
   fake behavior, propose the contract change and stop.
-- Fakes are deterministic: seeded RNG only, no network unless `USE_REAL_LLM=1`.
+- Fakes are deterministic: seeded RNG only, no network.
 - At most one comment per Inngest concept in `functions.ts`.
   Explanations go in the day's README.
 - Allowed dependencies: inngest, express, @types/express, tsx, typescript,
-  vitest, @biomejs/biome, zod (Day 12 only), and any `@types/*` package.
+  vitest, @biomejs/biome, zod (Days 12 and 12b only), and any `@types/*` package.
   Anything else: ask, especially if it would make the code easier to read
   on camera.
 
