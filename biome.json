@@ -7,7 +7,6 @@
       "!**/dist",
       "!**/*.tsbuildinfo",
       "!.claude",
-      "!days/*/starter",
       "!pnpm-lock.yaml",
       "!**/*.md",
       "!packages/shared/src/wall/hearth.css"

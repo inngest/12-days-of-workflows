@@ -1,12 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { LESSON_FILES, listDays, NO_EMIT_PROJECTS, ROOT, toStarter } from "./lib.js";
 
 // Usage: pnpm starters [--push]
-// Rebuilds the `starter` branch from HEAD without touching the main working tree, and refreshes
-// the starter copies kept on main in days/NN-slug/starter/.
+// Rebuilds the `starter` branch from HEAD without touching the main working tree.
 
 const push = process.argv.includes("--push");
 
@@ -40,16 +39,9 @@ try {
       if (!existsSync(path)) continue;
       const source = readFileSync(path, "utf8");
       if (!source.includes("@lesson:start")) continue;
-      const starter = toStarter(source, `days/${name}/${file}`);
-      writeFileSync(path, starter);
+      writeFileSync(path, toStarter(source, `days/${name}/${file}`));
       console.log(`rewrote days/${name}/${file}`);
-      // main keeps its own copy, next to the finished code: days/NN-slug/starter/src/...
-      const copy = join(ROOT, "days", name, "starter", file);
-      mkdirSync(dirname(copy), { recursive: true });
-      writeFileSync(copy, starter);
     }
-    // The starter branch is already all starter: it does not need the copies.
-    rmSync(join(worktree, "days", name, "starter"), { recursive: true, force: true });
   }
 
   // 2. The starter must typecheck, or viewers start from broken code.
