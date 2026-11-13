@@ -93,6 +93,40 @@
   max-width: none;
   margin-top: var(--space-3);
 }
+/* A card still waiting for its sender: dashed, with a small label above the artwork. */
+.dashboard .holiday-card[data-draft] {
+  border-style: dashed;
+}
+.draft-badge {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, inherit);
+}
+/* A button whose click is on its way to Inngest. */
+.spinner {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.5em;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.action-note {
+  margin: 0 0 var(--space-3);
+  color: var(--muted, inherit);
+  font-size: 0.9rem;
+}
 #card > .button {
   margin-bottom: var(--space-3);
 }

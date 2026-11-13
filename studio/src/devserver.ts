@@ -22,6 +22,7 @@ export type RunView = {
   startedAt: number | null; // epoch ms
   endedAt: number | null;
   data: Record<string, unknown>; // the event data that started the run (the first event of a batch)
+  draft: string | null; // the message the write-text step produced
 };
 
 async function gql<T>(query: string): Promise<T> {
@@ -104,6 +105,7 @@ type Span = {
   status: string;
   attempts: number | null;
   stepOp: string | null;
+  outputID: string | null;
   startedAt: string | null;
   endedAt: string | null;
   childrenSpans: Span[];
@@ -119,7 +121,7 @@ type RunDetail = {
 
 const DETAIL_FIELDS = `
   status output startedAt endedAt
-  trace { childrenSpans { name status attempts stepOp startedAt endedAt childrenSpans { name } } }`;
+  trace { childrenSpans { name status attempts stepOp outputID startedAt endedAt childrenSpans { name } } }`;
 
 /**
  * Asks for many runs in one request. GraphQL aliases (r0, r1, ...) let one query carry them all.
@@ -239,6 +241,29 @@ function whoIs(trigger: RunDetail["trigger"]): { cardId: string; who: string; da
   };
 }
 
+// ---------- A card's draft text ----------
+
+const drafts = new Map<string, string | null>(); // run id -> message (a step's output never changes)
+
+/** The message a run's write-text step produced, read from that step's saved output. */
+async function readDraft(runId: string, spans: Span[]): Promise<string | null> {
+  if (drafts.has(runId)) return drafts.get(runId) ?? null;
+  const outputID = spans.find((sp) => sp.name === "write-text")?.outputID;
+  if (!outputID || !/^[A-Za-z0-9+/=_-]+$/.test(outputID)) return null;
+  try {
+    const out = await gql<{ runTraceSpanOutputByID: { data: string | null } | null }>(
+      `{ runTraceSpanOutputByID(outputID: "${outputID}") { data } }`,
+    );
+    const text = (
+      JSON.parse(out.runTraceSpanOutputByID?.data ?? "null") as { text?: string } | null
+    )?.text;
+    drafts.set(runId, text ?? null);
+    return text ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- Putting it together ----------
 
 const STATUS: Record<string, RunView["status"]> = {
@@ -284,6 +309,7 @@ export async function readRuns(prefix: string, since: number): Promise<RunView[]
       queuedAt: run.queuedAt ? Date.parse(run.queuedAt) : null,
       startedAt: detail.startedAt ? Date.parse(detail.startedAt) : null,
       endedAt: detail.endedAt ? Date.parse(detail.endedAt) : null,
+      draft: await readDraft(run.id, detail.trace.childrenSpans),
     };
     if (status === "running") {
       // Steps we have seen in earlier runs of this function but this run has not reached yet.

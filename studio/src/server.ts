@@ -117,12 +117,14 @@ type Live = {
   finished: number;
   total: number;
   feed: FeedLine[];
-  card: { title: string; message: string; to: string } | null;
+  card: { title: string; message: string; to: string; draft?: boolean } | null;
   stamp: string | null;
   figures: Figure[]; // this side's lesson numbers, for the presenter drawer
   queue: QueueView | null; // who is being served and who waits (Days 06 and 10)
   status: string[]; // the status bar: calm product facts, never lesson figures
   action: string | null; // the label of a button that fits this moment, if any
+  actionNote: string | null; // why a pressed button did nothing
+  actionBusy: string | null; // what that button says while its click is on its way
 };
 
 type State = {
@@ -183,11 +185,23 @@ function cardOf(
     (r) => r.status === "done" && typeof (r.output as { text?: string } | null)?.text === "string",
   );
   const wrote = last ? written.find((r) => r.cardId === last.cardId) : written.at(-1);
+  // A card waiting for its sender's approval has not been delivered yet: show it as a draft.
+  const drafted = tracked.find((r) => r.draft && (!last || r.cardId === last.cardId));
+  const waiting = tracked.find((r) => r.status === "running" && r.draft);
+  if (!last && !wrote && waiting?.draft) {
+    return {
+      title: mine?.title || waiting.data.prompt?.toString() || "Happy holidays",
+      message: waiting.draft,
+      to: mine?.to ?? "",
+      draft: true,
+    };
+  }
   if (!last && !wrote) return null;
   return {
     title: mine?.title || last?.prompt || wrote?.data.prompt?.toString() || "Happy holidays",
     message:
       (wrote?.output as { text?: string } | null)?.text ??
+      drafted?.draft ??
       mine?.title ??
       "On its way to the inbox.",
     to: last?.to ?? mine?.to ?? "",
@@ -307,6 +321,8 @@ async function readState(wanted: string | undefined, wantedSide: unknown): Promi
       inProgress: cloud ? facts.running : mainFn.filter((r) => r.status === "running").length,
     }),
     action,
+    actionNote: problem && screen.acted ? (profile.action?.unavailable ?? null) : null,
+    actionBusy: action ? (profile.action?.busy ?? null) : null,
   };
   if (cloud) state.live.status[0] = "Connected to Inngest Cloud";
   if (focus)

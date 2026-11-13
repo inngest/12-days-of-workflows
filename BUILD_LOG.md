@@ -143,7 +143,7 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - The status feed next to the trace used to talk like a demo: a painter dropping brushes, a mail elf on the ice, a writer losing their train of thought. We rewrote every line to sound like a card product that wants its customer to feel looked after: "Having trouble reaching the image service, trying again (2)".
 - Failures now say what happened and what to expect. "We could not deliver your card. Please try sending it again." beats "Could not reach the inbox".
 - A card that stops no longer just stops. Every step a real product would show stays on screen, and the ones never reached read "Card not delivered" or "Artwork not created" instead of disappearing.
-- Reasons live in the line, like Day 02's "You were told why: …", all read from data we already had: the ledger's notify note, the event's `deliverAt`, a run's output.
+- Reasons live in the line, like Day 02's "Card rejected: …", all read from data we already had: the ledger's notify note, the event's `deliverAt`, a run's output.
 - Waiting got its own wording. Day 05 says when delivery is scheduled, Day 04 says nothing is sent until you approve, Day 07 says the card is waiting for a turn with the image service.
 - An expired Day 04 draft used to show "You approved it" because the wait step finishes when it times out. It now says you did not approve in time, and the delivery shows as not done.
 - Partial results read plainly too: Day 09 says "Could not deliver to 1 of 50 people. 49 delivered." and Day 12 counts "28 of 40 recipients loved it".

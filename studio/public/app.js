@@ -16,6 +16,7 @@ let day = route?.[1] ?? null; // the day this tab follows (null = let the server
 const side = route?.[2] ?? "fix"; // "problem" or "fix": which version this tab sends to and shows
 let formDay = null; // the day the form was built for
 let scenario = null; // the scenario picked in the presenter drawer
+let actionPending = false; // the action button was clicked and the run has not reacted yet
 let presenter = new URLSearchParams(location.search).has("presenter");
 
 // ---------- Talking to the server ----------
@@ -220,16 +221,22 @@ function drawLive(s) {
     );
     return;
   }
-  const action = live.action
-    ? `<button type="button" class="button" id="action">${esc(live.action)}</button>`
-    : "";
+  if (!live.action || live.actionNote) actionPending = false;
+  // Inngest takes a moment to act on the click: show it as work in progress straight away.
+  const action = !live.action
+    ? ""
+    : actionPending
+      ? `<button type="button" class="button" id="action" disabled aria-busy="true"><span class="spinner"></span>${esc(live.actionBusy ?? "Working...")}</button>`
+      : `<button type="button" class="button" id="action">${esc(live.action)}</button>`;
   const card = live.card
-    ? `<article class="holiday-card"><div class="scene">${SCENE}</div>
+    ? `<article class="holiday-card"${live.card.draft ? " data-draft" : ""}>
+        ${live.card.draft ? `<p class="draft-badge">Draft: waiting for your approval</p>` : ""}<div class="scene">${SCENE}</div>
         <h3 class="holiday-card-title">${esc(live.card.title)}</h3>
         <p class="holiday-card-message">${esc(live.card.message)}</p>
         ${live.card.to ? `<p class="holiday-card-from">To ${esc(live.card.to)}</p>` : ""}</article>`
     : "";
-  setHtml($("card"), action + card);
+  const note = live.actionNote ? `<p class="action-note">${esc(live.actionNote)}</p>` : "";
+  setHtml($("card"), action + note + card);
 }
 
 // ---------- The queue strip (Days 06 and 10) ----------
@@ -429,7 +436,13 @@ $("send").addEventListener("click", (e) => {
   post("/api/run", { scenario: name });
 });
 $("card").addEventListener("click", (e) => {
-  if (e.target.id === "action") post("/api/action", {});
+  const button = e.target.closest("#action");
+  if (!button || actionPending) return;
+  actionPending = true;
+  if (state) drawLive(state);
+  post("/api/action", {}).catch(() => {
+    actionPending = false;
+  });
 });
 $("scenarios").addEventListener("click", (e) => {
   const picked = e.target.closest("[data-scenario]")?.dataset.scenario;
