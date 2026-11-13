@@ -1,8 +1,6 @@
 import { type LedgerEntry, type Scenario, simulateReaction } from "@12days/shared";
 import { type CardRequest, cardRequested } from "./src/events.js";
 
-export const lessonBudget = 35;
-
 const names = "Alex Bea Cal Dee Eli Fay Gus Hal Ivy Jo Kit Lou Max Nia Oz Pip Quin Rae Sol Tess";
 
 /** "Happy holidays, Alex!" Distinct text per card, so the fakes don't time every card the same. */

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { inngest } from "./client.js";
 import { cardReacted, cardRequested } from "./events.js";
 
-// @lesson:start A scorer that waits for the recipient's reaction
+// A scorer that waits for the recipient's reaction
 export const reactionScorer = createScorer(
   inngest,
   { id: "score-recipient-reaction", schema: z.object({ cardId: z.string() }) },
@@ -20,12 +20,11 @@ export const reactionScorer = createScorer(
     return { name: "recipient-loved-it", value: reaction.data.loved };
   },
 );
-// @lesson:end
 
 export const createCard = inngest.createFunction(
   { id: "create-card", triggers: [cardRequested] },
   async ({ event, step, group, defer }) => {
-    // @lesson:start Split traffic between two prompt variants
+    // Split traffic between two prompt variants
     const { prompt } = event.data;
 
     const { result, variant, experimentRef } = await group.experiment("card-tone", {
@@ -35,11 +34,8 @@ export const createCard = inngest.createFunction(
       },
       select: experiment.weighted({ classic: 50, warm: 50 }),
     });
-    // @lesson:stub const result = await step.run("write-text", () => writeCard(event.data));
-    // @lesson:stub const variant = "classic";
-    // @lesson:end
 
-    // @lesson:start Score now what you know now; defer what you learn later
+    // Score now what you know now; defer what you learn later
     await step.score("score-length", { name: "fits-on-card", value: result.text.length <= 280 });
 
     defer("score-reaction", {
@@ -47,7 +43,6 @@ export const createCard = inngest.createFunction(
       data: { cardId: event.data.cardId },
       experiment: experimentRef,
     });
-    // @lesson:end
 
     await step.run("deliver", () => sendCard(event.data));
 
@@ -55,7 +50,4 @@ export const createCard = inngest.createFunction(
   },
 );
 
-// @lesson:start Register the scorer
 export const functions = [createCard, reactionScorer];
-// @lesson:stub export const functions = [createCard];
-// @lesson:end

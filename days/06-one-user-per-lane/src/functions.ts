@@ -8,9 +8,8 @@ export const createCard = inngest.createFunction(
     triggers: [cardRequested],
     concurrency: [
       { limit: 5 }, // total capacity
-      // @lesson:start Give each account its own lane
+      // Give each account its own lane
       { key: "event.data.accountId", limit: 2 },
-      // @lesson:end
     ],
   },
   async ({ event, step }) => {

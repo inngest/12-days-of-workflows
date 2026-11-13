@@ -1,8 +1,6 @@
 import { type LedgerEntry, type Scenario, simulateReaction } from "@12days/shared";
 import { type CardRequest, cardRequested } from "./src/events.js";
 
-export const lessonBudget = 35;
-
 /** Sandboxes are Inngest Cloud only, so `pnpm check` skips this day's scenarios. */
 export const requiresCloudSandboxes = true;
 

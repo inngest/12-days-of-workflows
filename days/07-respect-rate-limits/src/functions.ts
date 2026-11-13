@@ -7,9 +7,8 @@ export const renderCardImage = inngest.createFunction(
     id: "render-card-image",
     retries: 10,
     triggers: [invokedWithText],
-    // @lesson:start Start at most 4 renders per 10 seconds, just under the provider's 5
+    // Start at most 4 renders per 10 seconds, just under the provider's 5
     throttle: { limit: 4, period: "10s" },
-    // @lesson:end
   },
   async ({ event, step }) => step.run("render", () => renderImage({ text: event.data.text })),
 );

@@ -1,8 +1,6 @@
 import type { Scenario } from "@12days/shared";
 import { cardDeleted, cardScheduled, cleanupRequested, type ScheduledCard } from "./src/events.js";
 
-export const lessonBudget = 25;
-
 const scheduledCard = (inMs: number): ScheduledCard => ({
   cardId: "c1",
   to: "sam@example.com",

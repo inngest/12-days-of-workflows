@@ -68,7 +68,8 @@ git checkout starter
 ```
 
 `main` also keeps a starter copy of each day in `days/NN-slug/starter/`. Run `pnpm check NN` to
-test your fix against the day's scenarios. `pnpm starters` regenerates both.
+test your fix against the day's scenarios. `pnpm starters` rebuilds the `starter` branch from
+those copies.
 
 ## Cloud days
 
@@ -90,5 +91,5 @@ With both keys set, `pnpm studio` sends to Cloud too. Without them, Day 12 runs 
 | `pnpm day NN [--cloud]` | Runs a day (`pnpm day all` runs 01 to 12) |
 | `pnpm send NN [scenario] [--cloud]` | Sends a scenario's events |
 | `pnpm check [NN]` | Typechecks and runs scenario assertions |
-| `pnpm starters` | Regenerates the starters |
+| `pnpm starters` | Rebuilds the `starter` branch from the starter copies |
 | `pnpm lint` | Lints |

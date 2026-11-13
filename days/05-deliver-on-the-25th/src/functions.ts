@@ -6,20 +6,18 @@ export const scheduleDelivery = inngest.createFunction(
   {
     id: "schedule-delivery",
     triggers: [cardScheduled],
-    // @lesson:start Cancel the sleeping run when the card is deleted
+    // Cancel the sleeping run when the card is deleted
     cancelOn: [{ event: cardDeleted, match: "data.cardId" }],
-    // @lesson:end
   },
   async ({ event, step }) => {
-    // @lesson:start Sleep until the delivery date
+    // Sleep until the delivery date
     await step.sleepUntil("wait-for-delivery-date", event.data.deliverAt);
-    // @lesson:end
 
     await step.run("deliver", () => sendCard(event.data));
   },
 );
 
-// @lesson:start Clean up abandoned drafts nightly, or on demand
+// Clean up abandoned drafts nightly, or on demand
 export const cleanupDrafts = inngest.createFunction(
   {
     id: "cleanup-drafts",
@@ -27,9 +25,5 @@ export const cleanupDrafts = inngest.createFunction(
   },
   async ({ step }) => step.run("delete-stale", () => drafts.deleteOlderThan("7d")),
 );
-// @lesson:end
 
-// @lesson:start Register the cleanup function
 export const functions = [scheduleDelivery, cleanupDrafts];
-// @lesson:stub export const functions = [scheduleDelivery];
-// @lesson:end
