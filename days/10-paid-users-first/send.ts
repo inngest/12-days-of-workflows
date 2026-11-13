@@ -2,8 +2,6 @@ import type { LedgerEntry, Scenario } from "@12days/shared";
 import type { Inngest } from "inngest";
 import type { CardRequest } from "./src/events.js";
 
-export const lessonBudget = 5;
-
 const names = "Alex Bea Cal Dee Eli Fay Gus Hal Ivy Jo Kit Lou Max Nia Oz Pip Quin Rae Sol Tess";
 
 /** "Happy holidays, Alex!" Distinct text per card, so the fakes don't time every card the same. */

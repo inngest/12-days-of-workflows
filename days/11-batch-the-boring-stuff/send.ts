@@ -1,8 +1,6 @@
 import type { LedgerEntry, Scenario } from "@12days/shared";
 import type { Inngest } from "inngest";
 
-export const lessonBudget = 10;
-
 /** 120 opens across 30 cards, sent in 12 sends of 10 over about 2 s. */
 async function sendOpens(
   inngest: Inngest,

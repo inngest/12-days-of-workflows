@@ -128,7 +128,6 @@ export async function waitFor(what: string, ready: () => Promise<boolean>, timeo
 }
 
 export type DayModule = {
-  lessonBudget: number;
   scenarios: Record<string, Scenario>;
   requiresCloudSandboxes?: boolean; // `pnpm check` skips the scenarios of days that set this
 };
@@ -155,57 +154,4 @@ export async function sharedScenarioEnv(day: Day): Promise<Record<string, string
       shared[key] = value;
   }
   return shared;
-}
-
-// ---------- @lesson markers ----------
-
-/** The only files allowed to hold @lesson regions, relative to a day folder. */
-export const LESSON_FILES = ["src/functions.ts", "src/events.ts"];
-
-type LessonLine = { kind: "start" | "end" | "stub" | "inside" | "outside"; line: string };
-
-/** Classifies each line by marker. Throws on nested, unclosed or stray markers. */
-function parseLessons(source: string, file: string): LessonLine[] {
-  const parsed: LessonLine[] = [];
-  let inside = false;
-  source.split("\n").forEach((line, i) => {
-    const text = line.trim();
-    const where = `${file}:${i + 1}`;
-    if (text.startsWith("// @lesson:start")) {
-      if (inside) throw new Error(`${where}: nested @lesson:start`);
-      inside = true;
-      parsed.push({ kind: "start", line });
-    } else if (text.startsWith("// @lesson:end")) {
-      if (!inside) throw new Error(`${where}: @lesson:end without start`);
-      inside = false;
-      parsed.push({ kind: "end", line });
-    } else if (text.startsWith("// @lesson:stub")) {
-      if (!inside) throw new Error(`${where}: @lesson:stub outside a region`);
-      parsed.push({ kind: "stub", line });
-    } else {
-      parsed.push({ kind: inside ? "inside" : "outside", line });
-    }
-  });
-  if (inside) throw new Error(`${file}: unclosed @lesson:start`);
-  return parsed;
-}
-
-/** Non-blank lines inside @lesson regions, excluding stubs. */
-export function countLessonLines(source: string, file: string): number {
-  return parseLessons(source, file).filter((l) => l.kind === "inside" && l.line.trim() !== "")
-    .length;
-}
-
-/**
- * Rewrites a lesson file for the starter branch: each region becomes `// TODO: <text>`
- * followed by its uncommented stubs; everything else in the region is dropped.
- */
-export function toStarter(source: string, file: string): string {
-  const out: string[] = [];
-  for (const { kind, line } of parseLessons(source, file)) {
-    if (kind === "start") out.push(line.replace("// @lesson:start", "// TODO:"));
-    if (kind === "stub") out.push(line.replace(/\/\/ @lesson:stub ?/, ""));
-    if (kind === "outside") out.push(line);
-  }
-  return out.join("\n");
 }

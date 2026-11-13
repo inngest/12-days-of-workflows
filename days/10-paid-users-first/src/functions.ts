@@ -7,9 +7,8 @@ export const createCard = inngest.createFunction(
     id: "create-card",
     triggers: [cardRequested],
     concurrency: { limit: 2 },
-    // @lesson:start Pro cards jump up to 2 minutes ahead in the queue
+    // Pro cards jump up to 2 minutes ahead in the queue
     priority: { run: "event.data.plan == 'pro' ? 120 : 0" },
-    // @lesson:end
   },
   async ({ event, step }) => {
     const card = await step.run("write-text", () => writeCard(event.data));

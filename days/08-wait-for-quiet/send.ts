@@ -1,8 +1,6 @@
 import type { LedgerEntry, Scenario } from "@12days/shared";
 import type { Inngest } from "inngest";
 
-export const lessonBudget = 5;
-
 const MESSAGE = "Merry Christmas from all of us";
 const GAP_MS = 300;
 

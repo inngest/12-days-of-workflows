@@ -11,7 +11,7 @@ Full task spec: SPEC.md.
   `connect()`; needs `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY` (Day 12 recording)
 - `pnpm send NN [scenario]` — fires a scenario's events
 - `pnpm check [NN]` — typecheck + scenario assertions (all days if NN omitted)
-- `pnpm starters` — regenerates the `starter` branch
+- `pnpm starters` — rebuilds the `starter` branch from each day's `starter/` copies
 - `pnpm lint`
 
 ## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0`)
@@ -31,8 +31,8 @@ Full task spec: SPEC.md.
 
 ## Code rules
 - Step ids are kebab-case verb phrases (`write-text`); they appear on screen.
-- Lesson code (inside `@lesson` markers) stays within the day's line budget.
-  Over budget: stop and ask.
+- Each day's starter lives in `days/NN-slug/starter/` and must be updated by hand whenever
+  that day's `src/functions.ts` changes (`pnpm starters` typechecks it).
 - Days import only from `inngest` and `@12days/shared`. Never from another day.
 - Never change `@12days/shared` to make one day work. If a day needs a new
   fake behavior, propose the contract change and stop.

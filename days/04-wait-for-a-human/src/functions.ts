@@ -11,7 +11,7 @@ export const createCard = inngest.createFunction(
 
     await step.run("save-draft", () => drafts.save(event.data.cardId, card.text));
 
-    // @lesson:start Pause until the sender approves, or give up
+    // Pause until the sender approves, or give up
     const approval = await step.waitForEvent("wait-for-approval", {
       event: cardApproved,
       match: "data.cardId",
@@ -21,7 +21,6 @@ export const createCard = inngest.createFunction(
       await step.run("expire-draft", () => drafts.expire(event.data.cardId));
       return { status: "expired" };
     }
-    // @lesson:end
 
     await step.run("deliver", () => sendCard(event.data));
 

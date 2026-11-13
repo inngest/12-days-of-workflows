@@ -6,9 +6,8 @@ export const regeneratePreview = inngest.createFunction(
   {
     id: "regenerate-preview",
     triggers: [cardEdited],
-    // @lesson:start Wait for 3 quiet seconds per card, then use the latest edit
+    // Wait for 3 quiet seconds per card, then use the latest edit
     debounce: { key: "event.data.cardId", period: "3s" },
-    // @lesson:end
   },
   async ({ event, step }) =>
     step.run("write-preview", () => writeCard({ prompt: event.data.prompt })),

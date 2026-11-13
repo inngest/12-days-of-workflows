@@ -26,7 +26,7 @@ export const designCardFn = inngest.createFunction(
   async ({ event, step, group, defer }) => {
     const { cardId, prompt } = event.data;
 
-    // @lesson:start The agent writes the card as code
+    // The agent writes the card as code
     const { result, variant, experimentRef } = await group.experiment("design-prompt", {
       variants: {
         classic: () => step.run("design-classic", () => designCard({ prompt, variant: "classic" })),
@@ -34,10 +34,8 @@ export const designCardFn = inngest.createFunction(
       },
       select: experiment.weighted({ classic: 50, bold: 50 }),
     });
-    // @lesson:stub const variant = "classic";
-    // @lesson:end
 
-    // @lesson:start The sandbox runs it, not our servers
+    // The sandbox runs it, not our servers
     const sandbox = await step.sandbox.create("create-renderer", {
       name: `card-${cardId}`,
       vcpu: 1,
@@ -45,9 +43,8 @@ export const designCardFn = inngest.createFunction(
     });
 
     const first = await sandbox.commands.run("render-card", ["node", "-e", result.code]);
-    // @lesson:end
 
-    // @lesson:start If it breaks, the agent reads the error and revises
+    // If it breaks, the agent reads the error and revises
     let render = first;
 
     if (first.exitCode !== 0) {
@@ -57,10 +54,8 @@ export const designCardFn = inngest.createFunction(
       );
       render = await sandbox.commands.run("render-revision", ["node", "-e", fix.code]);
     }
-    // @lesson:stub const render = { stdout: "" };
-    // @lesson:end
 
-    // @lesson:start Durable execution keeps score
+    // Durable execution keeps score
     await inngest.score.experiment({
       name: "renders-first-try",
       value: first.exitCode === 0,
@@ -74,7 +69,6 @@ export const designCardFn = inngest.createFunction(
     });
 
     await sandbox.destroy("destroy-renderer");
-    // @lesson:end
 
     await step.run("deliver", () => sendCard(event.data));
 

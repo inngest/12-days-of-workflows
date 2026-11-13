@@ -39,7 +39,7 @@ Full task spec: SPEC.md.
 - `pnpm day NN` — runs day NN on port 30NN plus the Dev Server on :8288
 - `pnpm send NN [scenario]` — fires a scenario's events
 - `pnpm check [NN]` — typecheck + scenario assertions (all days if NN omitted)
-- `pnpm starters` — regenerates the `starter` branch
+- `pnpm starters` — rebuilds the `starter` branch from each day's `starter/` copies
 - `pnpm lint`
 
 ## Inngest SDK rules (TypeScript v4, `inngest@^4.8.0`)
@@ -59,8 +59,8 @@ Full task spec: SPEC.md.
 
 ## Code rules
 - Step ids are kebab-case verb phrases (`write-text`); they appear on screen.
-- Lesson code (inside `@lesson` markers) stays within the day's line budget.
-  Over budget: stop and ask.
+- Each day's starter lives in `days/NN-slug/starter/` and must be updated by hand whenever
+  that day's `src/functions.ts` changes (`pnpm starters` typechecks it).
 - Days import only from `inngest` and `@12days/shared`. Never from another day.
 - Never change `@12days/shared` to make one day work. If a day needs a new
   fake behavior, propose the contract change and stop.
@@ -251,7 +251,7 @@ export function startServer(opts: {
   - Day 04: buttons "Request card c1" → `card/requested` and "Approve c1" → `card/approved { cardId: "c1" }`
   - Day 08: text boxes "Card message" → `card/edited` and "Card message (no debounce)" → `card/edited.before`, each `{ cardId: "c1", prompt }` on every keystroke
   - Day 12: buttons "Love it" / "Meh" per card → `card/reacted`
-- **Not lesson code.** No `@lesson` markers, no budget, identical on `starter` and `main`. Scenarios in `send.ts` remain the tests; `pnpm check` asserts `GET /` serves the page and `/__wall` reports the right day (`PASS NN ledger-wall`). Every README's "Watch it" ends with one line on what the wall shows.
+- **Not lesson code.** No starter copy, identical on `starter` and `main`. Scenarios in `send.ts` remain the tests; `pnpm check` asserts `GET /` serves the page and `/__wall` reports the right day (`PASS NN ledger-wall`). Every README's "Watch it" ends with one line on what the wall shows.
 - **Design hooks.** Colors and type are the design system's tokens in `wall/hearth.css`, including the four level colors from the Notion tech spec. Every day shows its level color and title.
 
 ## Day folder contract
@@ -292,12 +292,7 @@ export type Scenario = {
 };
 ```
 
-**Lesson markers.** Allowed in `functions.ts` and `events.ts` only; never nested.
-
-- `// @lesson:start <TODO text>` opens a region; `// @lesson:end` closes it.
-- In the starter, the region becomes `// TODO: <TODO text>` at the same indentation.
-- Lines inside a region written as `// @lesson:stub <code>` are uncommented in the starter, so the starter still typechecks and runs (e.g. `// @lesson:stub const card = await writeCard(event.data);`).
-- The lesson budget counts non-blank lines inside regions, excluding stubs.
+**Starters.** Each day keeps its code-along version in `days/NN-slug/starter/` (for example `starter/src/functions.ts`), written by hand: the lesson code is replaced by `// TODO: <text>` comments plus whatever stubs keep it typechecking and running. Update it whenever the day's `src/functions.ts` changes. There are no budgets: the `@lesson` markers (and the line budget they fed) were removed so the on-camera files stay free of tooling comments.
 
 **README template.** Same headings every day; the landing page renders them.
 
@@ -313,7 +308,7 @@ export type Scenario = {
 
 ## Tooling: check and starters
 
-`pnpm check` is the definition of done for every day. `pnpm starters` derives the code-along branch from `main`, so the two never drift.
+`pnpm check` is the definition of done for every day. `pnpm starters` builds the code-along branch from `main` plus each day's `starter/` copies, and typechecks the result.
 
 **`scripts/check.ts` \[NN\]**
 
@@ -321,15 +316,14 @@ export type Scenario = {
 2. For each selected day, in order: start the app and a fresh Dev Server (as `day.ts` does) and wait until `GET /api/inngest` responds and the app is synced.
 3. For each scenario: `DELETE /__ledger`, run `send`, then assert `expect` against `GET /__ledger` and the Dev Server's runs. If every expected run status is terminal, poll every 2 s and pass as soon as all expectations hold, failing at `settleMs`; if any expects `Running`, wait the full `settleMs` first (Phase 3: retry backoff jitters too much for fixed waits).
 4. If a scenario has `env`, restart the app with that env before running it.
-5. Enforce the lesson budget: count lines inside `@lesson` regions and fail if over `export const lessonBudget` in the day's `send.ts`.
-6. Print one line per scenario (`PASS 01 flaky-image 4.2s`), tear everything down, exit 1 on any failure.
+5. Print one line per scenario (`PASS 01 flaky-image 4.2s`), tear everything down, exit 1 on any failure.
 
 Run lookups go through the Dev Server's REST API, starting from the event ids `send` returns. Runs not tied to a sent event (invoked children, fan-out children, `onFailure`) may need a function-level query. If the Dev Server exposes none, assert those through the ledger and record the gap under Stop and ask.
 
 **`scripts/make-starters.ts`**
 
-- Creates a temporary git worktree at `HEAD`, rewrites every file containing `@lesson` markers per the marker rules, and commits to `starter` with message `starter: <main sha>`.
-- Runs `tsc -b` inside the worktree. A starter that doesn't typecheck fails the script, which usually means a missing `@lesson:stub`.
+- Creates a temporary git worktree at `HEAD`, copies every file under each `days/NN-slug/starter/` over the same relative path in `days/NN-slug/`, deletes the `starter/` folders there, and commits to `starter` with message `starter: <main sha>`.
+- Runs `tsc -b` inside the worktree. A starter that doesn't typecheck fails the script, which usually means a `starter/` copy is out of date.
 - Pushes only with `--push` (CI on `main`). Never touches the main working tree. Idempotent: no diff, no commit.
 
 **CI.** `.github/workflows/ci.yml` runs `pnpm install --frozen-lockfile`, `pnpm check`, then `pnpm starters --push` on `main`. Renovate (or Dependabot) watches `inngest` so minor releases run through `pnpm check` before merging.
@@ -338,7 +332,7 @@ Run lookups go through the Dev Server's REST API, starting from the event ids `s
 
 Level 1 JTBD: “I am building something that needs to survive failure.” Day 1 is also the template every other day copies.
 
-### Day 01 — `01-survive-failure` (budget 15)
+### Day 01 — `01-survive-failure`
 
 Problem: the image API fails and the whole request dies, including the LLM call you already paid for.
 
@@ -362,13 +356,10 @@ export const cardRequested = eventType("card/requested", {
 export const createCard = inngest.createFunction(
   { id: "create-card", triggers: [cardRequested] },
   async ({ event, step }) => {
-    // @lesson:start Wrap each provider call in its own step
+    // Wrap each provider call in its own step
     const card = await step.run("write-text", () => writeCard(event.data));
     const image = await step.run("render-image", () => renderImage({ text: card.text }));
     await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
-    // @lesson:stub const card = await writeCard(event.data);
-    // @lesson:stub const image = await renderImage({ text: card.text });
-    // @lesson:end
     return { text: card.text, image: image.url };
   }
 );
@@ -378,7 +369,7 @@ export const functions = [createCard];
 
 README note: include a short “loop vs step” callout (one step per side effect, never one step around a whole loop). No code change.
 
-### Day 02 — `02-fail-fast` (budget 10)
+### Day 02 — `02-fail-fast`
 
 Problem: some failures can never succeed and retrying them wastes time and money, and nobody tells the sender. Two lessons: `NonRetriableError` with the rejection reason, and `onFailure` notifying the sender once. (The `RetryAfterError` / provider-429 beat was cut from the video.)
 
@@ -395,20 +386,18 @@ export const createCard = inngest.createFunction(
   {
     id: "create-card",
     triggers: [cardRequested],
-    // @lesson:start Tell the sender when a card fails for good
+    // Tell the sender when a card fails for good
     onFailure: async ({ event, error, step }) => {
       await step.run("notify-sender", () =>
         notifySender(event.data.event.data.cardId, error.message)
       );
     },
-    // @lesson:end
   },
   async ({ event, step }) => {
     await step.run("moderate", () => {
       const verdict = checkPrompt(event.data.prompt);
-      // @lesson:start Stop retrying when moderation says no
+      // Stop retrying when moderation says no
       if (!verdict.ok) throw new NonRetriableError(`Rejected: ${verdict.reason}`);
-      // @lesson:end
     });
     const card = await step.run("write-text", () => writeCard(event.data));
     // render-image + deliver as Day 01
@@ -418,7 +407,7 @@ export const createCard = inngest.createFunction(
 
 Verify: the `onFailure` event shape (`event.data.event`) against the errors doc.
 
-### Day 03 — `03-split-the-work` (budget 15)
+### Day 03 — `03-split-the-work`
 
 Problem: one function owns text, image and delivery, so the flakiest dependency sets the retry policy for everything.
 
@@ -429,25 +418,22 @@ Problem: one function owns text, image and delivery, so the flakiest dependency 
 | `very-flaky-image-before` | same, to `.before` | `create-card-before` Failed (4 retries exhausted); `mail.sendCard` 0 |
 
 ```ts
-// @lesson:start Give rendering its own function and retry policy
+// Give rendering its own function and retry policy
 export const renderCardImage = inngest.createFunction(
   { id: "render-card-image", retries: 10 }, // no trigger: invoke-only
   async ({ event, step }) =>
     step.run("render", () => renderImage({ text: event.data.text }))
 );
-// @lesson:end
 
 export const createCard = inngest.createFunction(
   { id: "create-card", triggers: [cardRequested] },
   async ({ event, step }) => {
     const card = await step.run("write-text", () => writeCard(event.data));
-    // @lesson:start Invoke it and wait for the result
+    // Invoke it and wait for the result
     const image = await step.invoke("render-image", {
       function: renderCardImage,
       data: { text: card.text },
     });
-    // @lesson:stub const image = await step.run("render-image", () => renderImage({ text: card.text }));
-    // @lesson:end
     await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
   }
 );
@@ -461,7 +447,7 @@ Verify: how v4 types `event.data` for an invoke-only function (the `invoke()` tr
 
 Level 2 JTBD: “I've added more complex workflows tuned to my users.” Waits in this level are short in scenarios (seconds), with production-length defaults in code.
 
-### Day 04 — `04-wait-for-a-human` (budget 15)
+### Day 04 — `04-wait-for-a-human`
 
 Problem: the sender should approve the draft before it goes out, without a polling loop or a state machine.
 
@@ -478,7 +464,7 @@ export const cardApproved = eventType("card/approved", {
 
 // inside createCard, after write-text and render-image:
 await step.run("save-draft", () => drafts.save(event.data.cardId, card.text));
-// @lesson:start Pause until the sender approves, or give up
+// Pause until the sender approves, or give up
 const approval = await step.waitForEvent("wait-for-approval", {
   event: cardApproved,
   match: "data.cardId",
@@ -488,14 +474,13 @@ if (approval === null) {
   await step.run("expire-draft", () => drafts.expire(event.data.cardId));
   return { status: "expired" };
 }
-// @lesson:end
 await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
 return { status: "delivered" };
 ```
 
 Verify: that `match` is accepted alongside an `eventType` object in v4 `waitForEvent`.
 
-### Day 05 — `05-deliver-on-the-25th` (budget 25)
+### Day 05 — `05-deliver-on-the-25th`
 
 Problem: cards go out on a specific date, abandoned drafts pile up, and a deleted card must never be delivered.
 
@@ -513,19 +498,17 @@ export const scheduleDelivery = inngest.createFunction(
   {
     id: "schedule-delivery",
     triggers: [cardApproved],
-    // @lesson:start Cancel the sleeping run when the card is deleted
+    // Cancel the sleeping run when the card is deleted
     cancelOn: [{ event: "card/deleted", match: "data.cardId" }],
-    // @lesson:end
   },
   async ({ event, step }) => {
-    // @lesson:start Sleep until the delivery date
+    // Sleep until the delivery date
     await step.sleepUntil("wait-for-delivery-date", event.data.deliverAt);
-    // @lesson:end
     await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
   }
 );
 
-// @lesson:start Clean up abandoned drafts nightly, or on demand
+// Clean up abandoned drafts nightly, or on demand
 export const cleanupDrafts = inngest.createFunction(
   {
     id: "cleanup-drafts",
@@ -533,12 +516,11 @@ export const cleanupDrafts = inngest.createFunction(
   },
   async ({ step }) => step.run("delete-stale", () => drafts.deleteOlderThan("7d"))
 );
-// @lesson:end
 ```
 
 The second trigger exists so `pnpm check` and the video can run cleanup without waiting for 3am. It also shows v4's trigger arrays.
 
-### Day 06 — `06-one-user-per-lane` (budget 5)
+### Day 06 — `06-one-user-per-lane`
 
 Problem: one account sends a burst of cards and everyone else's single card waits behind them.
 
@@ -556,9 +538,8 @@ export const createCard = inngest.createFunction(
     triggers: [cardRequested],
     concurrency: [
       { limit: 5 }, // total capacity
-      // @lesson:start Give each account its own lane
+      // Give each account its own lane
       { key: "event.data.accountId", limit: 2 },
-      // @lesson:end
     ],
   },
   async ({ event, step }) => { /* Day 01 body */ }
@@ -569,7 +550,7 @@ export const createCard = inngest.createFunction(
 
 Level 3 JTBD: “I'm getting crushed by usage and it's starting to hurt users.” Checkpointing, the fourth Level 3 lever, is on by default in v4, so it gets a README mention rather than a day.
 
-### Day 07 — `07-respect-rate-limits` (budget 5)
+### Day 07 — `07-respect-rate-limits`
 
 Problem: the image provider allows 5 calls per 10 seconds; a burst of cards turns into a wall of 429s and wasted retries.
 
@@ -585,16 +566,15 @@ export const renderCardImage = inngest.createFunction(
   {
     id: "render-card-image",
     retries: 10,
-    // @lesson:start Start at most 4 renders per 10 seconds, just under the provider's 5
+    // Start at most 4 renders per 10 seconds, just under the provider's 5
     throttle: { limit: 4, period: "10s" }, // 5 flaked ~1 run in 3: the Dev Server sometimes starts 6 at once
-    // @lesson:end
   },
   async ({ event, step }) =>
     step.run("render", () => renderImage({ text: event.data.text }))
 );
 ```
 
-### Day 08 — `08-wait-for-quiet` (budget 5)
+### Day 08 — `08-wait-for-quiet`
 
 Problem: the live preview regenerates on every edit, so a user typing a message bills eight LLM calls for one card.
 
@@ -613,16 +593,15 @@ export const regeneratePreview = inngest.createFunction(
   {
     id: "regenerate-preview",
     triggers: [cardEdited],
-    // @lesson:start Wait for 3 quiet seconds per card, then use the latest edit
+    // Wait for 3 quiet seconds per card, then use the latest edit
     debounce: { key: "event.data.cardId", period: "3s" },
-    // @lesson:end
   },
   async ({ event, step }) =>
     step.run("write-preview", () => writeCard({ prompt: event.data.prompt }))
 );
 ```
 
-### Day 09 — `09-send-to-everyone` (budget 20)
+### Day 09 — `09-send-to-everyone`
 
 Problem: sending one card to 50 recipients in a single loop means one failure re-sends to everyone who already got it.
 
@@ -641,23 +620,21 @@ export const deliveryRequested = eventType("card/delivery.requested", {
 export const sendToEveryone = inngest.createFunction(
   { id: "send-to-everyone", triggers: [cardBulkSend] },
   async ({ event, step }) => {
-    // @lesson:start Fan out: one event per recipient
+    // Fan out: one event per recipient
     await step.sendEvent(
       "fan-out",
       event.data.recipients.map((to) => deliveryRequested.create({ cardId: event.data.cardId, to }))
     );
-    // @lesson:end
     return { queued: event.data.recipients.length };
   }
 );
 
-// @lesson:start Each delivery is its own run with its own retries
+// Each delivery is its own run with its own retries
 export const deliverCard = inngest.createFunction(
   { id: "deliver-card", triggers: [deliveryRequested] },
   async ({ event, step }) =>
     step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }))
 );
-// @lesson:end
 ```
 
 README: when the parent needs the children's results, the same move uses `step.invoke` per recipient in `Promise.all` (callback to Day 03). Verify that `step.sendEvent` accepts `eventType.create()` payloads.
@@ -666,7 +643,7 @@ README: when the parent needs the children's results, the same move uses `step.i
 
 Level 4 JTBD: “I need to segment service by what users pay and protect my margins.” These are the features most likely to be gated by plan; see Stop and ask before publishing.
 
-### Day 10 — `10-paid-users-first` (budget 5)
+### Day 10 — `10-paid-users-first`
 
 Problem: when the queue backs up, paying customers wait behind free-tier traffic.
 
@@ -683,9 +660,8 @@ export const createCard = inngest.createFunction(
     id: "create-card",
     triggers: [cardRequested],
     concurrency: { limit: 2 },
-    // @lesson:start Pro cards jump up to 2 minutes ahead in the queue
+    // Pro cards jump up to 2 minutes ahead in the queue
     priority: { run: "event.data.plan == 'pro' ? 120 : 0" },
-    // @lesson:end
   },
   async ({ event, step }) => { /* Day 01 body */ }
 );
@@ -693,7 +669,7 @@ export const createCard = inngest.createFunction(
 
 Key queues are explainer-only here: key-queue scheduling currently requires Enterprise access ([flow control docs](https://www.inngest.com/docs/durable-execution/flow-control.md)), so it can't run in the Dev Server demo. The README links the priority vs key queues explainer video.
 
-### Day 11 — `11-batch-the-boring-stuff` (budget 10)
+### Day 11 — `11-batch-the-boring-stuff`
 
 Problem: every “card opened” event does its own warehouse insert, and you pay per write.
 
@@ -711,20 +687,18 @@ export const recordOpens = inngest.createFunction(
   {
     id: "record-opens",
     triggers: [cardOpened],
-    // @lesson:start Collect up to 50 opens, or whatever arrives in 5 s
+    // Collect up to 50 opens, or whatever arrives in 5 s
     batchEvents: { maxSize: 50, timeout: "5s" },
-    // @lesson:end
   },
-  // @lesson:start Handle the whole batch at once
+  // Handle the whole batch at once
   async ({ events, step }) =>
     step.run("insert-opens", () => insertRows("card_opens", events.map((e) => e.data)))
-  // @lesson:end
 );
 ```
 
 README: batching can't be combined with priority, cancellation events, rate limiting, idempotency or debounce on the same function ([batching docs](https://www.inngest.com/docs/durable-execution/flow-control/batching.md)). The warehouse fake records `meta.rows` so the check can count rows.
 
-### Day 12 — `12-measure-what-works` (budget 35)
+### Day 12 — `12-measure-what-works`
 
 Problem: you changed the card prompt and have no idea whether recipients like it more.
 
@@ -742,7 +716,7 @@ export const inngest = new Inngest({
 });
 
 // functions.ts
-// @lesson:start A scorer that waits for the recipient's reaction
+// A scorer that waits for the recipient's reaction
 export const reactionScorer = createScorer(
   inngest,
   { id: "score-recipient-reaction", schema: z.object({ cardId: z.string() }) },
@@ -756,12 +730,11 @@ export const reactionScorer = createScorer(
     return { name: "recipient-loved-it", value: reaction.data.loved };
   }
 );
-// @lesson:end
 
 export const createCard = inngest.createFunction(
   { id: "create-card", triggers: [cardRequested] },
   async ({ event, step, group, defer }) => {
-    // @lesson:start Split traffic between two prompt variants
+    // Split traffic between two prompt variants
     const { result: card, variant, experimentRef } = await group.experiment("card-tone", {
       variants: {
         classic: () => step.run("write-classic", () => writeCard({ ...event.data, variant: "classic" })),
@@ -769,16 +742,13 @@ export const createCard = inngest.createFunction(
       },
       select: experiment.weighted({ classic: 50, warm: 50 }),
     });
-    // @lesson:stub const card = await step.run("write-text", () => writeCard(event.data));
-    // @lesson:end
-    // @lesson:start Score now what you know now; defer what you learn later
+    // Score now what you know now; defer what you learn later
     await step.score("score-length", { name: "fits-on-card", value: card.text.length <= 280 });
     defer("score-reaction", {
       function: reactionScorer,
       data: { cardId: event.data.cardId },
       experiment: experimentRef,
     });
-    // @lesson:end
     await step.run("deliver", () => sendCard({ to: event.data.to, cardId: event.data.cardId }));
     return { variant };
   }
@@ -789,7 +759,7 @@ export const functions = [createCard, reactionScorer];
 
 Verify: the full `group.experiment()`, `defer()` and `createScorer()` signatures against the [Agent Evals reference](https://www.inngest.com/docs/agent-evals/reference.md). The starter's stub leaves `variant` undefined; fix with a second stub line if the return breaks typecheck.
 
-### Day 12b — `12b-design-agent` (budget 35) — PARKED
+### Day 12b — `12b-design-agent` — PARKED
 
 > Parked: not part of the 12 episodes for now. The code and checks stay in the repo; the studio hides it from the day list, `pnpm day all` skips it, and the root README does not list it.
 
@@ -802,7 +772,7 @@ Problem: an AI agent designs each card as code, and that code has to run somewhe
 
 The agent is the shared fake `designCard()` (seeded per card and variant; "bold" breaks more often than "classic"). It returns a Node program that prints the card as SVG; the sandbox runs it with `node -e`, no browser. Uses `sandboxMiddleware()` and `scoreMiddleware()` from `inngest/experimental` (`inngest@^4.21.1`) and `step.sandbox.create`, `sandbox.commands.run` and `sandbox.destroy`. `step.score()` has no `experiment` option, so the render score is `inngest.score.experiment()`.
 
-Sandboxes are an open beta on Inngest Cloud (Pro and up); the local Dev Server only uses them after `inngest login`. The day exports `requiresCloudSandboxes = true` from `send.ts`, and `pnpm check` prints SKIP for its scenarios while still running the lesson-budget check and the typecheck (`NO_EMIT_PROJECTS`, like Day 12). The scenarios' `expect` blocks are untested until run with a login.
+Sandboxes are an open beta on Inngest Cloud (Pro and up); the local Dev Server only uses them after `inngest login`. The day exports `requiresCloudSandboxes = true` from `send.ts`, and `pnpm check` prints SKIP for its scenarios while still running the typecheck (`NO_EMIT_PROJECTS`, like Day 12). The scenarios' `expect` blocks are untested until run with a login.
 
 ## Build order
 
@@ -823,7 +793,7 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
 
 **Phase 2: starters and CI.** Gate: `pnpm starters && pnpm check 01`
 
-- [ ] `scripts/make-starters.ts` per the marker rules; starter branch typechecks
+- [ ] `scripts/make-starters.ts` from the checked-in `starter/` copies; starter branch typechecks
 - [ ] `.github/workflows/ci.yml` and Renovate config for `inngest`
 
 **Phase 3: Days 02–06.** Gate: `pnpm check 02 03 04 05 06`
@@ -884,7 +854,6 @@ Claude Code leaves `// TODO(human): …` and moves on for anything below; none o
 **Always stop for**
 
 - Any change to the `@12days/shared` contract or the `Scenario` type
-- A day that can't meet its lesson budget
 - A dependency not on the allowed list
 - A docs page that contradicts this spec in a way that changes what a day teaches (pure syntax drift: fix it and log it)
 
