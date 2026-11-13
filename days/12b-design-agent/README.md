@@ -39,6 +39,7 @@ const sandbox = await step.sandbox.create("create-renderer", {
   vcpu: 1,
   memoryMb: 1024,
 });
+
 const first = await sandbox.commands.run("render-card", ["node", "-e", result.code]);
 ```
 
@@ -46,6 +47,7 @@ If the design broke, the agent gets the error and revises it once:
 
 ```ts
 let render = first;
+
 if (first.exitCode !== 0) {
   const error = first.stderr;
   const fix = await step.run("revise-design", () =>
@@ -64,7 +66,13 @@ await inngest.score.experiment({
   value: first.exitCode === 0,
   experiment: experimentRef,
 });
-defer("score-reaction", { function: reactionScorer, data: { cardId }, experiment: experimentRef });
+
+defer("score-reaction", {
+  function: reactionScorer,
+  data: { cardId },
+  experiment: experimentRef,
+});
+
 await sandbox.destroy("destroy-renderer");
 ```
 

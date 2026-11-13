@@ -13,6 +13,7 @@ export const recordOpens = inngest.createFunction(
   // @lesson:start Handle the whole batch at once
   async ({ events, step }) => {
     const opens = events.map((event) => event.data);
+
     return step.run("insert-opens", () => insertRows("card_opens", opens));
   },
   // @lesson:stub async ({ event, step }) => {

@@ -1,11 +1,6 @@
 import { sendCard } from "@12days/shared";
-import { eventType, staticSchema } from "inngest";
 import { inngest } from "./client.js";
-import type { BulkSend } from "./events.js";
-
-const cardBulkSendBefore = eventType("card/bulk-send.before", {
-  schema: staticSchema<BulkSend>(),
-});
+import { cardBulkSendBefore } from "./events.js";
 
 // The loop-inside-a-step anti-pattern: one failure retries the whole step, so everyone
 // delivered before it gets the card again.
@@ -17,6 +12,7 @@ export const sendToEveryoneBefore = inngest.createFunction(
         await sendCard({ to, cardId: event.data.cardId });
       }
     });
+
     return { queued: event.data.recipients.length };
   },
 );

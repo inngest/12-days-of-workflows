@@ -7,7 +7,9 @@ export const sendToEveryone = inngest.createFunction(
   async ({ event, step }) => {
     // @lesson:start Fan out: one event per recipient
     const { cardId, recipients } = event.data;
+
     const deliveries = recipients.map((to) => deliveryRequested.create({ cardId, to }));
+
     await step.sendEvent("fan-out", deliveries);
     // @lesson:stub await step.run("deliver-all", async () => {
     // @lesson:stub   for (const to of event.data.recipients) {
@@ -15,6 +17,7 @@ export const sendToEveryone = inngest.createFunction(
     // @lesson:stub   }
     // @lesson:stub });
     // @lesson:end
+
     return { queued: event.data.recipients.length };
   },
 );
