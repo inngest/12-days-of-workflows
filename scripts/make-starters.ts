@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { LESSON_FILES, listDays, NO_EMIT_PROJECTS, ROOT, toStarter } from "./lib.js";
+import { join } from "node:path";
+import { listDays, NO_EMIT_PROJECTS, ROOT } from "./lib.js";
 
 // Usage: pnpm starters [--push]
-// Rebuilds the `starter` branch from HEAD without touching the main working tree, and refreshes
-// the starter copies kept on main in days/NN-slug/starter/.
+// Rebuilds the `starter` branch from HEAD without touching the main working tree. Each day's
+// hand-maintained starter files in days/NN-slug/starter/ are laid over the finished day.
 
 const push = process.argv.includes("--push");
 
@@ -33,23 +33,14 @@ const worktree = join(mkdtempSync(join(tmpdir(), "12days-starter-")), "repo");
 mustGit(["worktree", "add", "--detach", worktree, "HEAD"]);
 
 try {
-  // 1. Rewrite every lesson file in place.
+  // 1. Lay each day's checked-in starter files over the finished code, then drop the copies.
   for (const name of listDays()) {
-    for (const file of LESSON_FILES) {
-      const path = join(worktree, "days", name, file);
-      if (!existsSync(path)) continue;
-      const source = readFileSync(path, "utf8");
-      if (!source.includes("@lesson:start")) continue;
-      const starter = toStarter(source, `days/${name}/${file}`);
-      writeFileSync(path, starter);
-      console.log(`rewrote days/${name}/${file}`);
-      // main keeps its own copy, next to the finished code: days/NN-slug/starter/src/...
-      const copy = join(ROOT, "days", name, "starter", file);
-      mkdirSync(dirname(copy), { recursive: true });
-      writeFileSync(copy, starter);
+    const starter = join(worktree, "days", name, "starter");
+    if (existsSync(starter)) {
+      cpSync(starter, join(worktree, "days", name), { recursive: true });
+      console.log(`overlaid days/${name}/starter`);
+      rmSync(starter, { recursive: true, force: true });
     }
-    // The starter branch is already all starter: it does not need the copies.
-    rmSync(join(worktree, "days", name, "starter"), { recursive: true, force: true });
   }
 
   // 2. The starter must typecheck, or viewers start from broken code.
@@ -61,7 +52,7 @@ try {
       run(`tsc ${project}`, tsc, ["--noEmit", "-p", project], worktree);
     }
   } catch (err) {
-    console.error("Starter does not typecheck. Missing a @lesson:stub?");
+    console.error("Starter does not typecheck. Update days/NN-slug/starter/ to match src/.");
     throw err;
   }
 

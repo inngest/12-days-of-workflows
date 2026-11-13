@@ -1,14 +1,11 @@
 import { type ChildProcess, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { LedgerEntry, RunStatus, Scenario } from "@12days/shared";
 import type { Inngest } from "inngest";
 import {
-  countLessonLines,
   type Day,
   DEV_SERVER,
   dayId,
-  LESSON_FILES,
   listDays,
   loadDay,
   NO_EMIT_PROJECTS,
@@ -34,23 +31,6 @@ function runStep(label: string, command: string, args: string[]) {
     console.error(`FAIL ${label}`);
     process.exit(1);
   }
-}
-
-// ---------- 5. Lesson budget ----------
-
-function checkBudget(day: Day, budget: number): string | null {
-  let used = 0;
-  for (const file of LESSON_FILES) {
-    let source: string;
-    try {
-      source = readFileSync(join(day.dir, file), "utf8");
-    } catch {
-      continue;
-    }
-    used += countLessonLines(source, file);
-  }
-  const line = `${used}/${budget} lesson lines`;
-  return used > budget ? `over budget: ${line}` : line;
 }
 
 // ---------- Dev Server queries ----------
@@ -323,11 +303,6 @@ async function checkWall(day: Day): Promise<string | null> {
 async function checkDay(day: Day): Promise<boolean> {
   const { inngest, mod } = await loadDay(day);
   let ok = true;
-
-  const budget = checkBudget(day, mod.lessonBudget);
-  const overBudget = budget?.startsWith("over budget") ?? false;
-  console.log(`${overBudget ? "FAIL" : "PASS"} ${day.nn} lesson-budget ${budget}`);
-  if (overBudget) ok = false;
 
   if (mod.requiresCloudSandboxes) {
     console.log(`SKIP ${day.nn} needs Inngest Cloud sandboxes (run with inngest login)`);

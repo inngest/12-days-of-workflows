@@ -1,8 +1,6 @@
 import type { Chaos, Scenario } from "@12days/shared";
 import { type CardRequest, cardRequested } from "./src/events.js";
 
-export const lessonBudget = 15;
-
 const card: CardRequest = {
   cardId: "c1",
   prompt: "Happy holidays, Sam!",

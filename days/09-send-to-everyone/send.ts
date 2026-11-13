@@ -1,8 +1,6 @@
 import type { Chaos, LedgerEntry, Scenario } from "@12days/shared";
 import type { Inngest } from "inngest";
 
-export const lessonBudget = 20;
-
 const recipients = Array.from({ length: 50 }, (_, i) => `friend${i + 1}@example.com`);
 
 // Delivery #25 fails once. retryInMs makes the retry come about 1 s later instead of after

@@ -172,3 +172,11 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Inside lesson regions the blank lines sit between the real lesson statements, while the `@lesson` markers and stub lines stay exactly where they were. Lesson budgets count non-blank lines, so they didn't move.
 - Stripping the markers came up too, and we did not decide it. They all stayed in place, along with every other readability idea that was floated (shorter calls, step id renames, reflowed options).
 - The starter copies were regenerated and the README snippets updated to match the new code.
+
+## Phase: Markers out, starters by hand
+
+- The `// @lesson:start / stub / end` comments existed only for our tooling, but they sat in the exact file the presenter shows on camera. Every region was a line of noise a beginner had to read past, so they went.
+- Each start marker became a plain comment saying what the next lines do, and the stub and end lines simply disappeared. The three-or-four places that only registered a function in the `functions` list lost their comment altogether; the list speaks for itself.
+- The code-along still works because every day already had a checked-in copy in `days/NN-slug/starter/`. Those copies, with their `// TODO:` comments, are now the source of truth, and `pnpm starters` just lays them over the finished day on a temporary worktree and typechecks the result.
+- The trade-off is that starters are hand-maintained now. Change a day's `functions.ts` and its starter can drift, and nothing but the typecheck in `pnpm starters` will say so. We decided the clean on-camera file was worth that.
+- The lesson-line budget went with the markers, since there is nothing left to count. A day that grows too big will have to be caught by eye on review, not by a failing check.
