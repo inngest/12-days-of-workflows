@@ -1,26 +1,25 @@
 # Day 06: Why does one busy account make everyone else wait?
 
-## The problem
+**Key idea:** a concurrency limit with a `key` gives each account its own lane.
 
-One account sends a burst of cards. They take every slot your workers have, so the next customer's
-single card waits in line behind all of them.
+## Problem
+
+One account sends a burst of cards and takes every slot. The next customer's single card waits
+behind all of them.
 
 ## Break it
 
 ```sh
-IMAGE_RATE=off pnpm day 06
+pnpm day 06
 pnpm send 06 noisy-neighbor-before
 ```
 
-`IMAGE_RATE=off` turns off the image service's rate limit, which gets its own day (07).
+`pnpm day 06` turns the image rate limit off, because rate limits are Day 07's lesson.
 
-Account `a` sends 20 cards, then account `b` sends one. With a single lane of 5, `b1` is one of
-the last cards delivered. Watch the `[mail]` lines: `b1` lands behind nearly all of `a`'s cards.
+Account `a` sends 20 cards, then `b` sends one. With one shared lane of 5, `b1` is among the last
+`[mail]` lines.
 
 ## Fix it
-
-Add a second concurrency limit keyed by account. The total stays at 5, but no single account can
-hold more than 2 of those slots.
 
 ```ts
 concurrency: [
@@ -29,26 +28,25 @@ concurrency: [
 ],
 ```
 
+The total stays at 5, but no account can hold more than 2 slots.
+
 ```sh
 pnpm send 06 noisy-neighbor
 ```
 
-`b1` now starts as soon as it arrives and is among the first few deliveries, while `a` works
-through its burst two at a time.
+`b1` starts as soon as it arrives and is among the first deliveries.
 
 ## Watch it
 
-In http://localhost:8288, filter runs by `create-card`. During the burst, only two `a` runs are
-active at once and the rest are queued. `b1` goes straight to running.
-
-The ledger wall at http://localhost:3006 lists deliveries in order. Watch where `b1` lands with and
-without the per-account lane.
+- Dev Server (http://localhost:8288): during the burst only two `a` runs are active and the rest
+  queue. `b1` goes straight to running.
+- Ledger wall (http://localhost:3006): deliveries in order. Find `b1` before and after.
 
 ## In your app
 
-Key concurrency by whatever your customers share capacity across: account, workspace, API key.
-Keep a total limit too, so many accounts at once can't overwhelm the provider. A function can have
-up to two concurrency constraints.
+Key concurrency by whatever customers share capacity across: account, workspace, API key. Keep a
+total limit too, so many accounts at once can't overwhelm a provider. A function can have up to two
+concurrency limits.
 
 ## Next
 
