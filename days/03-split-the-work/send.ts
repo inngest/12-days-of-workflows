@@ -5,8 +5,8 @@ export const lessonBudget = 15;
 
 const card: CardRequest = {
   cardId: "c1",
-  prompt: "Merry Christmas, Grandma. Thanks for the cookies!",
-  to: "grandma@example.com",
+  prompt: "Happy holidays, Sam!",
+  to: "sam@example.com",
 };
 
 // Five failures outlast the default 4 retries, but not render-card-image's 10.

@@ -5,9 +5,15 @@ const $ = (id) => document.getElementById(id);
 // The hearth from ui/specimen.html: the artwork on every card and the empty state.
 const SCENE = `<svg viewBox="0 0 360 220" role="img" aria-label="A cozy fireplace with two stockings"> <rect class="s-wall" width="360" height="150"/> <rect class="s-floor" y="150" width="360" height="70"/> <rect class="s-yellow" x="30" y="20" width="76" height="58" rx="4"/> <rect class="s-paper" x="38" y="28" width="60" height="42"/> <path class="s-wall" d="M68 36l16 28H52z"/> <circle class="s-coral" cx="86" cy="38" r="5"/> <circle class="s-coral" cx="300" cy="44" r="16"/> <path class="s-stroke" d="M300 60v50"/> <rect class="s-paper" x="118" y="62" width="124" height="92"/> <rect class="s-yellow" x="106" y="50" width="148" height="14" rx="3"/> <path class="s-night" d="M146 154v-44a34 34 0 0 1 68 0v44z"/> <path class="s-coral" d="M180 154c-22-2-26-22-12-36 2 10 8 12 12-4 14 12 28 24 20 40z"/> <path class="s-yellow" d="M182 154c-10 0-12-10-4-18 2 6 6 6 8-2 8 8 10 20-4 20z"/> <path class="s-coral" d="M130 64h14v24c0 6 8 6 8 14s-6 8-12 8-10-2-10-8z"/> <rect class="s-paper" x="128" y="64" width="18" height="6"/> <path class="s-paper" d="M214 64h14v24c0 6 8 6 8 14s-6 8-12 8-10-2-10-8z"/> <rect class="s-yellow" x="212" y="64" width="18" height="6"/> <path class="s-leaf" d="M300 120l22 32h-44zM300 96l18 30h-36z"/> <rect class="s-yellow" x="294" y="152" width="12" height="10"/> <circle class="s-yellow" cx="300" cy="94" r="4"/> <ellipse class="s-paper" cx="180" cy="190" rx="92" ry="16"/> <ellipse class="s-stroke" cx="180" cy="190" rx="78" ry="11" stroke="var(--coral)" stroke-dasharray="6 6"/> </svg>`;
 
+// Each tab is one side of one day, named by its address: /day/06/problem or /day/06/fix.
+// Days with no "before" live at /day/04. At "/" the server's newest day is picked and the
+// address is rewritten to match.
+const route = location.pathname.match(/^\/day\/(\d+b?)(?:\/(problem|fix))?\/?$/);
+const SIDES = { problem: "Without Inngest", fix: "With Inngest" };
+
 let state = null;
-let day = null; // the day the page follows (null = let the server choose)
-let side = "problem"; // what the switch says the next card should use: "problem" or "fix"
+let day = route?.[1] ?? null; // the day this tab follows (null = let the server choose)
+const side = route?.[2] ?? "fix"; // "problem" or "fix": which version this tab sends to and shows
 let formDay = null; // the day the form was built for
 let scenario = null; // the scenario picked in the presenter drawer
 let presenter = new URLSearchParams(location.search).has("presenter");
@@ -17,11 +23,15 @@ let presenter = new URLSearchParams(location.search).has("presenter");
 async function refresh() {
   try {
     // Give up after 5 s: the next tick tries again, so the page heals by itself.
-    const res = await fetch(day ? `/api/state?day=${day}` : "/api/state", {
+    const res = await fetch(`/api/state?${new URLSearchParams({ side, ...(day && { day }) })}`, {
       signal: AbortSignal.timeout(5000),
     });
     state = await res.json();
-    day = state.day; // stay on this day, even if another one gets busier
+    if (!day && state.day) {
+      // First visit to "/": settle on a day and show it in the address bar.
+      day = state.day;
+      history.replaceState(null, "", dayPath(day, state.profile?.hasContrast ? "fix" : null));
+    }
     draw(state);
   } catch {
     showNotice("The studio server is not answering. Start it with: pnpm studio");
@@ -33,11 +43,16 @@ async function loop() {
   setTimeout(loop, 1000);
 }
 
+/** The address of one side of a day, keeping ?presenter=1 when it is there. */
+function dayPath(nn, which) {
+  return `/day/${nn}${which ? `/${which}` : ""}${location.search}`;
+}
+
 function post(path, body) {
   return fetch(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ day, side, ...body }),
   }).then(() => setTimeout(refresh, 250));
 }
 
@@ -50,18 +65,22 @@ function showNotice(text) {
 
 function draw(s) {
   drawDevPanel(s);
-  if (s.days.length === 0 || !s.profile) {
+  if (!s.profile) {
     $("stage").hidden = true;
     setHtml($("days"), "");
     $("day-stamp").hidden = true;
     $("switch").hidden = true;
-    $("switch-note").hidden = true;
-    $("day-line").textContent = "Every card, durably delivered";
-    showNotice("No day is running yet. In another terminal, start one with: pnpm day 01");
+    showNotice(
+      s.missing
+        ? `Day ${s.missing} is not running. In another terminal, start it with: pnpm day ${s.missing}`
+        : "No day is running yet. In another terminal, start one with: pnpm day 01",
+    );
     return;
   }
   $("stage").hidden = false;
   if (s.error) showNotice(`That card could not be sent: ${s.error}`);
+  else if (s.cloud.message) showNotice(s.cloud.message);
+  else if (s.cloud.active) showNotice("");
   else if (!s.devServer)
     showNotice("The Dev Server is not answering on :8288. Restart the day with: pnpm day NN");
   else showNotice("");
@@ -69,7 +88,6 @@ function draw(s) {
   const p = s.profile;
   if (formDay !== p.nn) {
     formDay = p.nn;
-    side = p.hasContrast ? "problem" : "fix";
     drawForm(p);
   }
   drawMasthead(s);
@@ -83,11 +101,11 @@ function draw(s) {
 
 function drawMasthead(s) {
   const p = s.profile;
-  $("day-line").textContent = `Day ${p.nn}: ${p.title}`;
   $("day-stamp").textContent = p.nn.endsWith("b")
-    ? "Bonus day"
-    : `Day ${Number.parseInt(p.nn, 10)}/12`;
+    ? "12 Days of Inngest · Bonus day"
+    : `12 Days of Inngest · Day ${Number.parseInt(p.nn, 10)}`;
   $("day-stamp").hidden = false;
+  document.title = `Holiday Card Studio · Day ${p.nn}${p.hasContrast ? ` · ${SIDES[side]}` : ""}`;
 
   // Day buttons appear only when several days run at once (pnpm day all).
   const buttons = s.days.length > 1 ? s.days : [];
@@ -96,18 +114,22 @@ function drawMasthead(s) {
     buttons
       .map(
         (d) =>
-          `<button type="button" class="button quiet" data-day="${d.nn}" aria-pressed="${d.nn === s.day}">${d.nn}</button>`,
+          `<a class="button quiet" href="${dayPath(d.nn, side)}" data-day="${d.nn}" aria-pressed="${d.nn === s.day}">${d.nn}</a>`,
       )
       .join(""),
   );
 
-  $("switch").hidden = false;
-  for (const button of $("switch").children) {
-    button.setAttribute("aria-pressed", String(button.dataset.side === side));
-    button.disabled = !p.hasContrast;
-  }
-  $("switch-note").textContent = "Nothing to compare today: this one is all fix.";
-  $("switch-note").hidden = p.hasContrast;
+  // Two plain links: this tab says which side it is, the other one is a click (or its own tab) away.
+  $("switch").hidden = !p.hasContrast;
+  setHtml(
+    $("switch"),
+    ["problem", "fix"]
+      .map(
+        (which) =>
+          `<a class="switch-option" href="${dayPath(p.nn, which)}" aria-pressed="${which === side}"${which === side ? ' aria-current="page"' : ""}>${SIDES[which]}</a>`,
+      )
+      .join(""),
+  );
 }
 
 // ---------- The send-a-card panel ----------
@@ -143,17 +165,16 @@ function drawForm(p) {
 
 function drawSend(s) {
   const p = s.profile;
-  const busy = s.sending || p.cloudOnly;
+  const blocked = p.cloudOnly && !s.cloud.active; // a Cloud-only day, and the keys are not set
+  const busy = s.sending || blocked;
   $("send-btn").disabled = busy;
   $("send-btn").textContent = s.sending ? "Sending..." : "Send card";
   const shortcut = $("shortcut");
   if (shortcut) shortcut.disabled = busy;
 
   const lines = [];
-  if (p.cloudOnly) lines.push("This day needs Inngest Cloud, so it cannot send cards here.");
-  else {
-    if (p.tip) lines.push(p.tip);
-  }
+  if (blocked) lines.push(s.cloud.message);
+  else if (p.tip) lines.push(p.tip);
   setHtml($("send-hint"), lines.map(esc).join("<br>"));
 
   // A running app cannot take a scenario's env, so say how to start the day for the rush button.
@@ -283,33 +304,25 @@ function drawTrace(s) {
   );
 }
 
-// ---------- The problem and the fix, side by side ----------
-
-function sideHtml(name, which, snap) {
-  const body = snap
-    ? `<dl>${snap.figures.map((f) => `<div><dd>${esc(f.value)}</dd><dt>${esc(f.label)}</dt></div>`).join("")}</dl>`
-    : `<p class="compare-empty">Run the ${which} to see it</p>`;
-  const note = snap?.interrupted
-    ? `<small class="compare-note" title="The other run started first.">Cut short</small>`
-    : "";
-  const active = which === side ? ' data-active="true"' : "";
-  return `<section class="compare-side" data-side="${which}"${active}><div class="compare-name"><h3>${name}</h3>${note}</div>${body}</section>`;
-}
+// ---------- The numbers for this tab (presenter only) ----------
 
 function drawCompare(s) {
-  const show = s.profile.hasContrast && presenter;
+  const figures = s.live?.figures ?? [];
+  const show = presenter && figures.length > 0;
   $("compare").hidden = !show;
   // The slim product status bar and the presenter's strip share the bottom edge: one at a time.
-  $("statusbar").hidden = presenter && s.profile.hasContrast;
+  $("statusbar").hidden = show;
   setHtml(
     $("statusbar"),
     (s.live?.status ?? ["Connected"]).map((t) => `<span>${esc(t)}</span>`).join(""),
   );
   if (!show) return;
+  const rows = figures
+    .map((f) => `<div><dd>${esc(f.value)}</dd><dt>${esc(f.label)}</dt></div>`)
+    .join("");
   setHtml(
     $("compare"),
-    sideHtml("The problem", "problem", s.compare.problem) +
-      sideHtml("The fix", "fix", s.compare.fix),
+    `<section class="compare-side" data-side="${side}"><div class="compare-name"><h3>${SIDES[side]}</h3></div><dl>${rows}</dl></section>`,
   );
 }
 
@@ -318,10 +331,14 @@ function drawCompare(s) {
 function drawDrawer(s) {
   $("drawer").hidden = !presenter;
   if (!presenter) return;
-  if (!s.scenarios.some((x) => x.name === scenario)) scenario = s.scenarios[0]?.name ?? null;
+  // A tab lists only the scenarios for its own side ("-before" ones belong to the problem tab).
+  const mine = s.scenarios.filter(
+    (x) => !s.profile.hasContrast || x.name.endsWith("-before") === (side === "problem"),
+  );
+  if (!mine.some((x) => x.name === scenario)) scenario = mine[0]?.name ?? null;
   setHtml(
     $("scenarios"),
-    s.scenarios
+    mine
       .map(
         (x) =>
           `<button type="button" class="button ${x.name === scenario ? "" : "quiet"}" data-scenario="${esc(x.name)}">${esc(x.name)}</button>`,
@@ -329,13 +346,17 @@ function drawDrawer(s) {
       .join(""),
   );
   // A running app cannot take a scenario's env, so say how to start the day instead.
-  const picked = s.scenarios.find((x) => x.name === scenario);
+  const picked = mine.find((x) => x.name === scenario);
   const env = Object.entries(picked?.env ?? {}).map(([k, v]) => `${k}=${v}`);
   const lines = [picked ? `${picked.description}.` : ""];
   if (env.length) lines.push(`Start the day with: ${env.join(" ")} pnpm day ${s.day}`);
-  if (picked?.needsCloud) lines.push("This one needs Inngest Cloud, so it cannot run here.");
+  const noCloud = picked?.needsCloud && !s.cloud.active;
+  if (noCloud)
+    lines.push(
+      `This one runs in Inngest Cloud. Set INNGEST_SIGNING_KEY and INNGEST_EVENT_KEY, start the day with pnpm day ${s.day} --cloud, then restart the studio.`,
+    );
   setHtml($("scenario-note"), lines.map(esc).join("<br>"));
-  $("run").disabled = s.sending || !picked || picked.needsCloud;
+  $("run").disabled = s.sending || !picked || noCloud;
   $("run").textContent = s.sending ? "Sending..." : "Run scenario";
 }
 
@@ -355,7 +376,20 @@ function showRun(id) {
 
 /** Loads the frame lazily, and only while the Dev Server answers. Never yanks a page away. */
 function drawDevPanel(s) {
+  const cloud = s.cloud.active;
+  $("dev-open").textContent = cloud ? "Inngest Cloud" : "Dev Server";
+  $("dev-title").textContent = cloud ? "Inngest Cloud" : "Inngest Dev Server";
+  $("cloud-open").href = s.cloud.url;
+  $("cloud-panel").hidden = !cloud;
+  $("dev-tab").hidden = cloud;
   if ($("devpanel").hidden) return;
+  if (cloud) {
+    // Inngest Cloud refuses to be framed, so there is a button instead of the page.
+    $("dev-down").hidden = true;
+    $("dev-frame").hidden = true;
+    $("dev-current").hidden = true;
+    return;
+  }
   $("dev-down").hidden = s.devServer;
   $("dev-frame").hidden = !s.devServer;
   if (s.devServer && !$("dev-frame").getAttribute("src")) showRun(currentRun());
@@ -385,32 +419,17 @@ $("dev-current").addEventListener("click", () => {
 $("send").addEventListener("submit", (e) => {
   e.preventDefault();
   const form = Object.fromEntries(new FormData($("send")));
-  post("/api/send", { day: state.day, problem: side === "problem", form });
+  post("/api/send", { form });
 });
 $("send").addEventListener("click", (e) => {
   if (e.target.id !== "shortcut" || !state) return;
   const p = state.profile;
   const name =
     side === "problem" && p.hasContrast ? `${p.shortcut.scenario}-before` : p.shortcut.scenario;
-  post("/api/run", { day: state.day, scenario: name });
+  post("/api/run", { scenario: name });
 });
 $("card").addEventListener("click", (e) => {
-  if (e.target.id === "action") post("/api/action", { day: state.day });
-});
-$("switch").addEventListener("click", (e) => {
-  const picked = e.target.closest("[data-side]");
-  if (!picked || picked.disabled || !state) return;
-  side = picked.dataset.side;
-  drawMasthead(state);
-  drawSend(state);
-  drawCompare(state);
-});
-$("days").addEventListener("click", (e) => {
-  const picked = e.target.closest("[data-day]")?.dataset.day;
-  if (!picked) return;
-  day = picked;
-  scenario = null;
-  refresh();
+  if (e.target.id === "action") post("/api/action", {});
 });
 $("scenarios").addEventListener("click", (e) => {
   const picked = e.target.closest("[data-scenario]")?.dataset.scenario;
@@ -419,10 +438,10 @@ $("scenarios").addEventListener("click", (e) => {
   if (state) drawDrawer(state);
 });
 $("run").addEventListener("click", () => {
-  post("/api/run", { day: state.day, scenario });
+  post("/api/run", { scenario });
   $("run").disabled = true;
 });
-$("clear").addEventListener("click", () => post("/api/clear", { day: state.day }));
+$("clear").addEventListener("click", () => post("/api/clear", {}));
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("devpanel").hidden) return setDevPanel(false);
   if (e.metaKey || e.ctrlKey || e.target.closest("input, textarea, select")) return;

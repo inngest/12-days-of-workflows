@@ -1,49 +1,66 @@
 # Holiday Card Studio
 
-The screen for Jason's holiday card business, shown in every episode. It looks like a product:
-send a card on the left, watch it being made in the middle, and see what Inngest really did on
-the right. It follows whichever day you started.
+The screen Jason's business runs on, shown in every episode. Send a card on the left, watch it
+being made in the middle, and see what Inngest did on the right.
 
 ## Run it
 
-```bash
-pnpm day 01        # terminal 1: the day and the Dev Server
-pnpm studio        # terminal 2: http://localhost:3100
+```sh
+pnpm day 06      # terminal 1: the day and the Dev Server
+pnpm studio      # terminal 2: http://localhost:3100
 ```
+
+The studio opens the newest running day. Port 3100 can be changed with `STUDIO_PORT`.
+
+## Two tabs: problem and fix
+
+Every day with a "before" has two pages:
+
+| Address | Shows | Sends to |
+| --- | --- | --- |
+| `/day/06/problem` | Without Inngest | the `-before` function |
+| `/day/06/fix` | With Inngest | the real function |
+
+Open both in two browser tabs. Each tab keeps its own state, so sending from one never clears the
+other. `/day/06` opens the fix. Days 04 and 12 have no "before", so they have one page: `/day/04`.
 
 ## What you see
 
-- **Send a card**: a short form. Which fields show depends on the day (an account on Day 06, a plan
-  on Day 10, a delivery time on Day 05). Send fires the day's real event through the Dev Server.
-  Days about load add one button for a rush of cards.
-- **Your card, live**: the steps in plain language as they happen, retries and waits included,
-  then the finished card. A stamp sums up the run ("Billed once", "Coal-proof").
-- **Under the hood**: the same run as the dark trace, with the real names (`step.run`,
-  `step.invoke`, `step.waitForEvent`) and the function option the day teaches.
-- **The problem / The fix** (top right): sends to the day's `.before` event or the real one. The
-  last result of each side stays in a slim strip pinned to the bottom of the screen, with the side the switch points at gently highlighted. Days with no "before" (04, 12, 12b) say so.
+- **Send a card**: a short form. The fields depend on the day (an account on Day 06, a plan on
+  Day 10, a delivery time on Day 05). Days about load add a button for a rush of cards.
+- **Your card, live**: the steps in plain words as they happen, then the finished card.
+- **Under the hood**: the same run with the real names (`step.run`, `step.waitForEvent`) and the
+  option the day teaches.
 
 Some days pause for you: Day 04 shows **Approve the card**, Day 05 **Changed my mind: delete it**.
 
-## Dev Server slide-up
+## Shortcuts
 
-The **Dev Server** text in the masthead (or press `d`) slides the real Inngest Dev Server up over the
-whole page, with **Close**, **Escape**, **Open in a new tab**, and **Show current run** when the
-studio has moved on to a newer card. It opens on the card's run (`/runs?runID=...`), or the runs
-list, and loads only on first open. If the Dev Server is down it says how to restart the day.
+- **`d`**, or the "Dev Server" link: slides the real Dev Server over the page.
+- **`p`**, or add `?presenter=1` to any address: the scenario launcher for the tab's side.
+  Press **Clear** to reset the tab.
 
-## Presenter drawer
+## Day 12 and Inngest Cloud
 
-Add `?presenter=1` (or press `p`) for the scenario launcher: the same scenarios as `pnpm send`,
-their env hints, and **Clear**. A running app cannot take a new env var, so the drawer prints the
-line to restart with, such as `IMAGE_RATE=off pnpm day 06`. Day 12b is greyed out (needs Inngest Cloud).
+Set both keys before starting the studio and it sends to Inngest Cloud, with no flag:
 
-## Where the data comes from
+```sh
+export INNGEST_SIGNING_KEY=signkey-… INNGEST_EVENT_KEY=…
+pnpm day 12 --cloud
+pnpm studio
+```
 
-- `src/days.ts`, `src/ledger.ts`: which days answer on 3001 to 3013, and their ledger counters
-- `src/devserver.ts`: runs and steps from the Dev Server's GraphQL (1.5 s timeouts, so a restart never stalls the page)
-- `src/profiles.ts`: per day, the event names, form fields, defaults and what to follow
-- `src/words.ts`: step id to friendly copy; `src/feed.ts`: feed lines and trace rows; `src/proof.ts`: the numbers and stamps
-- `src/cards.ts`: form to events; `public/`: plain HTML, CSS and JavaScript on top of `ui/`
+Cloud can't be shown inside the studio, so the Dev Server slide-up becomes a button that opens
+your Cloud runs page (set `INNGEST_ENV` for an environment other than `production`). The live
+card follows the day's own ledger, so there is no step trace in this mode. Without the keys, Day
+12 runs against the Dev Server.
 
-`@12days/shared` and the days are untouched; the studio never imports a day's lesson code.
+## Code map
+
+- `src/days.ts`, `src/ledger.ts`: which port each day uses, and its ledger counters
+- `src/devserver.ts`: runs and steps from the Dev Server
+- `src/profiles.ts`: per day, the event names, form fields and what to follow
+- `src/words.ts`, `src/feed.ts`, `src/proof.ts`: plain-language copy, feed lines, stamps
+- `src/cards.ts`: form to events. `public/`: the page
+
+The studio never imports a day's lesson code.

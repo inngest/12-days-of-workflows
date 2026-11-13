@@ -5,8 +5,8 @@ export const lessonBudget = 15;
 
 const card: CardRequest = {
   cardId: "c1",
-  prompt: "Merry Christmas, Grandma. Thanks for the cookies!",
-  to: "grandma@example.com",
+  prompt: "Happy holidays, Sam!",
+  to: "sam@example.com",
 };
 
 // Text and image take a few seconds; approvals sent before the wait starts are not seen.

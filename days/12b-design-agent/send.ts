@@ -36,8 +36,8 @@ async function ledger(): Promise<LedgerEntry[]> {
 
 const c1 = {
   cardId: "c1",
-  prompt: "Merry Christmas, Grandma. Thanks for the cookies!",
-  to: "grandma@example.com",
+  prompt: "Happy holidays, Sam!",
+  to: "sam@example.com",
 };
 
 export const scenarios: Record<string, Scenario> = {
@@ -50,18 +50,18 @@ export const scenarios: Record<string, Scenario> = {
       ledger: { "llm.designCard": 2, "mail.sendCard": 1 },
     },
   },
-  "design-12": {
-    description: "12 cards split between two designers; each scored when its recipient reacts",
+  "design-4": {
+    description: "4 cards split between two designers; each scored when its recipient reacts",
     env: { REACTION_TTL: "60s" },
     send: async ({ inngest, sleep }) => {
       const sent = await inngest.send(
-        Array.from({ length: 12 }, (_, i) => cardRequested.create(card(`c${i + 1}`))),
+        Array.from({ length: 4 }, (_, i) => cardRequested.create(card(`c${i + 1}`))),
       );
-      // Reactions only count once each scorer is waiting, so wait for all 12 deliveries first.
+      // Reactions only count once each scorer is waiting, so wait for all 4 deliveries first.
       let entries: LedgerEntry[] = [];
       for (let tries = 0; tries < 120; tries++) {
         entries = await ledger();
-        if (entries.filter((e) => e.provider === "mail" && e.ok).length >= 12) break;
+        if (entries.filter((e) => e.provider === "mail" && e.ok).length >= 4) break;
         await sleep(500);
       }
       await sleep(2_000);
@@ -74,8 +74,8 @@ export const scenarios: Record<string, Scenario> = {
     },
     expect: {
       settleMs: 60_000,
-      runs: [{ fn: "score-recipient-reaction", status: "Completed", count: 12 }],
-      ledger: { "mail.sendCard": 12 },
+      runs: [{ fn: "score-recipient-reaction", status: "Completed", count: 4 }],
+      ledger: { "mail.sendCard": 4 },
     },
   },
 };

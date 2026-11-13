@@ -1,24 +1,24 @@
 # Day 04: How do I wait two days for a "yes" without a polling loop?
 
-## The problem
+**Key idea:** `step.waitForEvent()` pauses a run until the event you need arrives or time runs
+out. Nothing polls.
 
-The sender should see the draft and approve it before the card goes out. Doing that by hand means
-a status column, a cron job that polls it, and code to clean up drafts nobody approved.
+## Problem
+
+The sender should approve the draft before the card goes out. By hand that means a status
+column, a cron job to poll it, and cleanup for drafts nobody approved.
 
 ## Break it
 
 ```sh
-DRAFT_TTL=15s pnpm day 04   # a 15-second approval window instead of 48 hours
+pnpm day 04
 pnpm send 04 approve-before
 ```
 
-The card is written, rendered and delivered in one go. Watch the `[mail]` line: it goes to
-grandma before anyone looked at the draft.
+`pnpm day 04` sets a 15-second approval window (`DRAFT_TTL`) instead of 48 hours. Without an
+approval step, the card is delivered before anyone sees the draft: watch the `[mail]` line.
 
 ## Fix it
-
-`step.waitForEvent()` pauses the run until a matching event arrives or the timeout passes. While
-it waits, nothing is running and nothing is polling.
 
 ```ts
 const approval = await step.waitForEvent("wait-for-approval", {
@@ -32,8 +32,7 @@ if (approval === null) {
 }
 ```
 
-`match: "data.cardId"` means "an approval whose `data.cardId` equals this run's `data.cardId`".
-On timeout you get `null`, so the expiry path is plain code.
+`match` pairs the approval with this card. A timeout gives you `null`, so expiry is plain code.
 
 ```sh
 pnpm send 04 approve
@@ -41,24 +40,22 @@ pnpm send 04 ignore
 pnpm send 04 approve-wrong-card
 ```
 
-`approve` sends the card, then `card/approved` for `c1` a few seconds later, and the card is
-delivered. `ignore` sends nobody's approval, and 15 seconds later the draft expires and nothing is
-sent. `approve-wrong-card` approves `c2`, so `c1` keeps waiting until it expires.
+- `approve`: the approval arrives and the card is delivered.
+- `ignore`: nobody approves, and after 15 seconds the draft expires with nothing sent.
+- `approve-wrong-card`: approves `c2`, so `c1` keeps waiting until it expires.
 
 ## Watch it
 
-In http://localhost:8288 the `create-card` run sits on `wait-for-approval`. Send the approval and
-watch it resume straight into `deliver`. Run `ignore` and the run ends with output
-`{ "status": "expired" }` once the timeout passes.
-
-The ledger wall at http://localhost:3004 has **Request card c1** and **Approve c1** buttons, so you
-can play the human yourself. Wait for the image to render before approving.
+- Dev Server (http://localhost:8288): `create-card` sits on `wait-for-approval`, then resumes into
+  `deliver`. After `ignore` it ends with `{ "status": "expired" }`.
+- Studio (`pnpm studio`, http://localhost:3100/day/04): play the sender with **Approve the card**.
+  Wait for the image first.
+- Ledger wall (http://localhost:3004): the same **Request card c1** and **Approve c1** buttons.
 
 ## In your app
 
-Anywhere you store "pending" state and poll for a change (approvals, email verification, payment
-confirmation), send an event when the change happens and `waitForEvent` for it instead. The wait
-only sees events sent after it starts, so send the approval after the draft is ready.
+Wherever you store "pending" and poll for a change (approvals, email verification, payment), send
+an event when it happens and wait for it instead. The wait only sees events sent after it starts.
 
 ## Next
 

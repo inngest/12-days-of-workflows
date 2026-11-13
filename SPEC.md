@@ -239,12 +239,12 @@ export function startServer(opts: {
   - Day 01: card preview plus "LLM billed N×", with a cost meter. Broken: 3× with hatched repeat bills. Fixed: 1× and dashed "saved" ticks.
   - Day 06: Maisie's queue spot (`b1`'s delivery position, of 21), grouped account rows and lanes. Broken: about #21. Fixed: about #3.
   - Day 07: a grid of image calls with a big "Rate limited" count. Broken: a wall of 429 tiles. Fixed: all ✓, 0.
-  - Day 02: card preview, a Timeline and an LLM-calls stat. Fixed (`grinch`): Rejected stamp, "No retries" on the failed moderation step, a "Sender notified" toast, 0 LLM calls. A small secondary panel shows the `llm-429` beat: the gap between the failed call and its retry (about 5 s). Broken: the `-before` run makes no ledger calls, so this side stays on its empty state (see BUILD_LOG).
+  - Day 02: card preview, a Timeline and an LLM-calls stat. Fixed (`grinch`): Rejected stamp, "No retries" on the failed moderation step, a "Sender notified" toast, 0 LLM calls. Broken: the `-before` run makes no ledger calls, so this side stays on its empty state (see BUILD_LOG).
   - Day 03: card preview, a "Painting tries" stat and a Timeline. Broken: 5 tries, "Gave up on the artwork", card art hatched, nothing delivered. Fixed: the separate function keeps going, the 6th try paints, the card is Sent.
   - Day 08: card preview, "LLM calls" stat and a cost meter, one tick per billed call. Broken: 8 ticks. Fixed: "Waiting for quiet" while the wall's own text box is being typed into (the page counts the edits it sends, since the ledger can't see debounced ones), then one tick, with dashed "saved" ticks for the edits it skipped.
   - Day 09: a call grid of recipients in order of arrival, with "Got it twice", "Delivered", "Retried" and "Sends made" stats. Broken: 24 hatched ×2 tiles. Fixed: 50 ✓ and one ↻.
   - Day 11: "Warehouse writes" stat plus a cost meter, one small tick per write at a flat $0.002 (a constant in the page, since the warehouse ledger entry carries rows, not dollars). Broken: 120 ticks, $0.240. Fixed: three wide batch tiles (×50, ×50, ×20), $0.006.
-- **Every other day** (04, 05, 10, 12 and 12b) falls back to a generic Hearth Post view: counts for LLM calls, image renders, cards sent and warehouse writes as stat panels, plus the delivery order as chips (duplicates and failures flagged). The same Before / After split applies.
+- **Every other day** (04, 05, 10 and 12; 12b is parked) falls back to a generic Hearth Post view: counts for LLM calls, image renders, cards sent and warehouse writes as stat panels, plus the delivery order as chips (duplicates and failures flagged). The same Before / After split applies.
 - **Reset** calls `DELETE /__ledger`, so presenters can clear the wall between "break it" and "fix it".
 - **`POST /__event`** sends `{ name, data }` through the day's own client, accepting only event names listed in `wall.actions`. Actions render as buttons or text boxes beside the switch.
 - **Actions, three days only**, where a person is the trigger:
@@ -378,16 +378,15 @@ export const functions = [createCard];
 
 README note: include a short “loop vs step” callout (one step per side effect, never one step around a whole loop). No code change.
 
-### Day 02 — `02-fail-fast` (budget 25)
+### Day 02 — `02-fail-fast` (budget 10)
 
-Problem: some failures can never succeed and retrying them wastes time and money; others tell you exactly when to come back.
+Problem: some failures can never succeed and retrying them wastes time and money, and nobody tells the sender. Two lessons: `NonRetriableError` with the rejection reason, and `onFailure` notifying the sender once. (The `RetryAfterError` / provider-429 beat was cut from the video.)
 
 | Scenario | Sends | Expect |
 | --- | --- | --- |
 | `happy` | c1 | `create-card` Completed |
 | `grinch` | c1 with prompt containing “grinch” | `create-card` Failed within 15 s; `mail.notifySender` 1; `llm.writeCard` 0 |
 | `grinch-before` | same, to `.before` | after 15 s `create-card-before` still Running (retrying); `mail.notifySender` 0 |
-| `llm-429` | c1 with `chaos.llm: { failTimes: 1, status: 429, retryAfterMs: 5000 }` | Completed; `llm.writeCard` 2; custom: second call 4–10 s after first (retries are scheduled to the second; default backoff would be ≥ 15 s) |
 
 `before.ts`: Day 1's function plus the moderation check throwing a plain `Error`.
 
@@ -411,24 +410,13 @@ export const createCard = inngest.createFunction(
       if (!verdict.ok) throw new NonRetriableError(`Rejected: ${verdict.reason}`);
       // @lesson:end
     });
-    const card = await step.run("write-text", async () => {
-      try {
-        return await writeCard(event.data);
-      } catch (err) {
-        // @lesson:start Retry exactly when the provider says to
-        if (err instanceof ProviderError && err.status === 429) {
-          throw new RetryAfterError("LLM rate limited", err.retryAfterMs!, { cause: err });
-        }
-        // @lesson:end
-        throw err;
-      }
-    });
+    const card = await step.run("write-text", () => writeCard(event.data));
     // render-image + deliver as Day 01
   }
 );
 ```
 
-Verify: the `onFailure` event shape (`event.data.event`) and `RetryAfterError`'s third argument against the errors doc.
+Verify: the `onFailure` event shape (`event.data.event`) against the errors doc.
 
 ### Day 03 — `03-split-the-work` (budget 15)
 
@@ -801,14 +789,16 @@ export const functions = [createCard, reactionScorer];
 
 Verify: the full `group.experiment()`, `defer()` and `createScorer()` signatures against the [Agent Evals reference](https://www.inngest.com/docs/agent-evals/reference.md). The starter's stub leaves `variant` undefined; fix with a second stub line if the return breaks typecheck.
 
-### Day 12b — `12b-design-agent` (budget 35)
+### Day 12b — `12b-design-agent` (budget 35) — PARKED
 
-Problem: an AI agent designs each card as code, and that code has to run somewhere safe. Cut B of Day 12; folder `12b-design-agent`, port 3112 (`pnpm day 12b`).
+> Parked: not part of the 12 episodes for now. The code and checks stay in the repo; the studio hides it from the day list, `pnpm day all` skips it, and the root README does not list it.
+
+Problem: an AI agent designs each card as code, and that code has to run somewhere safe. Formerly Cut B of Day 12; folder `12b-design-agent`, port 3112 (`pnpm day 12b`).
 
 | Scenario | Env | Sends | Expect |
 | --- | --- | --- | --- |
 | `design-1` | `REACTION_TTL=60s` | card c1, whose first design always breaks | `designCard` called twice (design + revision), one delivery |
-| `design-12` | `REACTION_TTL=60s` | 12 cards, then one `card/reacted` per card | 12 `score-recipient-reaction` runs Completed, 12 deliveries |
+| `design-4` | `REACTION_TTL=60s` | 4 cards, then one `card/reacted` per card | 4 `score-recipient-reaction` runs Completed, 4 deliveries |
 
 The agent is the shared fake `designCard()` (seeded per card and variant; "bold" breaks more often than "classic"). It returns a Node program that prints the card as SVG; the sandbox runs it with `node -e`, no browser. Uses `sandboxMiddleware()` and `scoreMiddleware()` from `inngest/experimental` (`inngest@^4.21.1`) and `step.sandbox.create`, `sandbox.commands.run` and `sandbox.destroy`. `step.score()` has no `experiment` option, so the render score is `inngest.score.experiment()`.
 
@@ -865,11 +855,11 @@ Six phases, one Claude Code session each. A phase is done only when its gate com
   | Day | Lines / budget | Day | Lines / budget | Day | Lines / budget |
   | --- | --- | --- | --- | --- | --- |
   | 01 | 3 / 15 | 05 | 10 / 25 | 09 | 10 / 20 |
-  | 02 | 9 / 25 | 06 | 1 / 5 | 10 | 1 / 5 |
+  | 02 | 5 / 10 | 06 | 1 / 5 | 10 | 1 / 5 |
   | 03 | 9 / 15 | 07 | 1 / 5 | 11 | 8 / 10 |
   | 04 | 9 / 15 | 08 | 1 / 5 | 12 | 32 / 35 |
 
-**Day 12 Cut B.** `12b-design-agent` is built on top of Phase 5 (Cloud sandboxes, so it is checked statically only; see "Day 12b" above).
+**Day 12b (parked).** `12b-design-agent` is built on top of Phase 5 (Cloud sandboxes, so it is checked statically only; see "Day 12b" above).
 
 **Readability sweep (after Phase 5).** Reference code above is the original target shape. The days have since been simplified for the screen: `sendCard(event.data)`, Day 04 has a `before.ts` and an `approve-before` scenario with a 15 s TTL, Day 05's event is `card/scheduled`, Day 07 throttles at 4 per 10 s, Day 09 uses `card/delivery.requested` and `send-to-everyone`, Days 03/07 call the invoke trigger `invokedWithText`, and Day 12's scorer uses `match`. The code and READMEs are the source of truth; BUILD_LOG has the reasons.
 

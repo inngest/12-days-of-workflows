@@ -1,24 +1,24 @@
+> **Parked:** not part of the 12 episodes for now. The code stays here, but nothing links to it.
+
 # Day 12b: Can the agent design the card, safely?
 
-## The problem
+**Key idea:** run agent-written code in an Inngest Sandbox, treat a crash as data, and score each
+design style.
 
-You let an AI agent design each holiday card as code, and the code has to run somewhere. Running
-it on your own servers is risky, and nothing tells you whether one kind of design works better
-than another.
+## Problem
+
+An AI agent designs each card as code, and that code has to run somewhere. On your own servers
+it can crash or hang the worker. And nothing tells you which design style works better.
 
 ## Break it
 
-There's no `-before` scenario. The naive version asks the model for a program and runs it right
-inside your app, so one bad design can crash the worker, hang it, or touch things it shouldn't.
-It also records nothing about which style of design broke and which didn't, so "bold looks great"
-and "bold keeps failing" are both just opinions.
+There is no `-before` scenario. The naive version runs the generated program inside your app, and
+records nothing about which style broke.
 
 ## Fix it
 
-Three ideas: the agent is the brain, the sandbox is the hands, and durable execution keeps score.
-
-The brain: an experiment splits cards between two design styles, and each style asks the agent
-(a fake here) for a small Node program that prints the card as SVG:
+An experiment splits cards between two design styles. Each asks the agent (a fake here) for a
+small Node program that prints the card as SVG:
 
 ```ts
 const { result, variant, experimentRef } = await group.experiment("design-prompt", {
@@ -30,8 +30,8 @@ const { result, variant, experimentRef } = await group.experiment("design-prompt
 });
 ```
 
-The hands: the program runs in an Inngest Sandbox, a throwaway VM in Inngest Cloud, instead of on
-your servers. A crash comes back as data (`exitCode`, `stderr`), not as an exception:
+The program runs in a sandbox, a throwaway VM in Inngest Cloud. A crash comes back as data
+(`exitCode`, `stderr`), not an exception:
 
 ```ts
 const sandbox = await step.sandbox.create("create-renderer", {
@@ -42,7 +42,7 @@ const sandbox = await step.sandbox.create("create-renderer", {
 const first = await sandbox.commands.run("render-card", ["node", "-e", result.code]);
 ```
 
-If the design broke, the agent gets the error and writes a revision. One revision is enough here:
+If the design broke, the agent gets the error and revises it once:
 
 ```ts
 let render = first;
@@ -55,8 +55,8 @@ if (first.exitCode !== 0) {
 }
 ```
 
-The score: whether the first design rendered is recorded against the variant, and the recipient's
-reaction is scored later by the same deferred scorer as Day 12:
+Whether the first design rendered is scored against the variant. The recipient's reaction is scored
+later by Day 12's deferred scorer:
 
 ```ts
 await inngest.score.experiment({
@@ -68,55 +68,44 @@ defer("score-reaction", { function: reactionScorer, data: { cardId }, experiment
 await sandbox.destroy("destroy-renderer");
 ```
 
-`step.score()` has no `experiment` option, so `inngest.score.experiment()` is how a score gets
-credited to a variant. It runs at the function body, outside any step. The function returns
-`{ variant, svg }`, so the finished card is in the run's output.
+`step.score()` has no `experiment` option, so `inngest.score.experiment()` credits a variant. It
+runs in the function body, outside any step.
 
-Sandboxes and scoring are both beta, and they need `sandboxMiddleware()` and `scoreMiddleware()`
-from `inngest/experimental` on the client (see `client.ts`). The fake designer breaks about one
-card in three, and "bold" breaks more often than "classic".
+`sandboxMiddleware()` and `scoreMiddleware()` from `inngest/experimental` must be on the client
+(see `client.ts`). Both are beta. The fake designer breaks about one card in three, and "bold"
+more often than "classic".
 
 ## Watch it
 
 Sandboxes are an open beta on Inngest Cloud (Pro and up), so this day can't run on a plain local
-Dev Server, and `pnpm check` skips it. Log in once, and the local Dev Server runs your functions
-and runs locally while the sandboxes run in Cloud:
+Dev Server, and `pnpm check` skips it. Log in once. The local Dev Server then runs your functions
+while the sandboxes run in Cloud:
 
 ```sh
 npx inngest-cli@latest login
-REACTION_TTL=60s pnpm day 12b
+pnpm day 12b
 pnpm send 12b design-1
 ```
 
-Card `c1` is one whose first design always breaks. In the run trace at http://localhost:8288 you
-should see `design-classic` or `design-bold`, then `create-renderer`, `render-card` (it fails with
-a `ReferenceError`), `revise-design`, `render-revision` (it works), `destroy-renderer` and
-`deliver`. The run's output holds the rendered SVG.
+Card `c1` always breaks its first design. In the Dev Server (http://localhost:8288) the run shows
+`design-classic` or `design-bold`, `create-renderer`, `render-card` (fails with a
+`ReferenceError`), `revise-design`, `render-revision` (works), `destroy-renderer` and `deliver`.
+The run output holds the SVG.
 
-For the comparison, send twelve cards and let every recipient react:
-
-```sh
-pnpm send 12b design-12
-```
-
-To record against Inngest Cloud itself, with keys from your environment (see Day 12):
+For the comparison, send four cards and let every recipient react:
 
 ```sh
-export INNGEST_SIGNING_KEY=signkey-… INNGEST_EVENT_KEY=…
-REACTION_TTL=60s pnpm day 12b --cloud
-pnpm send 12b design-1 --cloud
+pnpm send 12b design-4
 ```
 
-The ledger wall at http://localhost:3112 has **Request card c1**, **c1: Loved it** and
-**c1: Meh** buttons.
+To record in Inngest Cloud itself, set the keys as in [Day 12](../12-measure-what-works) and add
+`--cloud` to both commands.
+
+The ledger wall (http://localhost:3112) has **Request card c1**, **c1: Loved it** and **c1: Meh**
+buttons.
 
 ## In your app
 
-Any time an agent produces something you must execute (code, a script, a query), run it in a
-sandbox and treat the exit code as an ordinary result. Destroy the sandbox when you're done; if a
-run ends early, the SDK's cleanup function destroys it for you. Then score two things: did it
-work, and was it good, and keep the score names stable.
-
-## Next
-
-That's Day 12, cut B. Back to [Day 12](../12-measure-what-works) for the experiment on its own.
+Run anything an agent produces (code, a script, a query) in a sandbox, and treat the exit code as
+an ordinary result. Destroy the sandbox when done. Then score two things: did it work, and was it
+good.

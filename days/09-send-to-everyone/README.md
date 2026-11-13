@@ -1,9 +1,12 @@
 # Day 09: Why did half my list get the card twice?
 
-## The problem
+**Key idea:** never loop over side effects inside one step. Fan out: one event, and one run, per
+recipient.
 
-Sending one card to 50 people is a loop. When delivery #25 fails and the job retries, it starts
-the loop again, and the first 24 people get the card a second time.
+## Problem
+
+Sending one card to 50 people is a loop. When delivery #25 fails and the job retries, the loop
+starts over and the first 24 people get the card again.
 
 ## Break it
 
@@ -12,15 +15,10 @@ pnpm day 09
 pnpm send 09 bulk-50-before
 ```
 
-`send-to-everyone-before` wraps the whole `for` loop in a single `step.run`. This is the loop-inside-a-step
-anti-pattern: a step is the unit of retry, so one failed send retries all 50. Watch the `[mail]`
-lines: `friend1` through `friend24` are delivered twice. The fake mailer asks Inngest to retry
-after one second, so the demo is quick. Normal backoff would wait longer.
+`send-to-everyone-before` puts the whole `for` loop in one `step.run`. A step is the unit of
+retry, so one failure retries all 50. In the `[mail]` lines, `friend1` to `friend24` arrive twice.
 
 ## Fix it
-
-Fan out. The parent sends one event per recipient, and a second function delivers each one in its
-own run, with its own retries.
 
 ```ts
 const { cardId, recipients } = event.data;
@@ -37,23 +35,20 @@ export const deliverCard = inngest.createFunction(
 pnpm send 09 bulk-50
 ```
 
-Fifty `deliver-card` runs. Only the failed delivery retries, and every recipient gets exactly one card.
+Fifty `deliver-card` runs. Only the failed one retries, and everyone gets exactly one card.
 
 ## Watch it
 
-In http://localhost:8288 `send-to-everyone` finishes almost immediately with `{ queued: 50 }`. Fifty
-`deliver-card` runs fan out beside it. One shows a failed attempt and a retry.
-
-The ledger wall at http://localhost:3009 shows all 50 deliveries in order, with anyone who got the
-card twice in red.
+- Dev Server (http://localhost:8288): `send-to-everyone` finishes at once with `{ queued: 50 }`,
+  and fifty `deliver-card` runs fan out beside it. One shows a failed attempt and a retry.
+- Ledger wall (http://localhost:3009): all 50 deliveries, with double sends in red.
 
 ## In your app
 
-One step per side effect: never put a loop of side effects inside one `step.run`. If the parent
-needs every child's result, use `step.invoke()` per recipient inside `Promise.all` instead (Day 03).
-Fan-out runs in parallel, so pair it with concurrency or throttling (Days 06–07) for providers
-with limits. Checkpointing, on by default in v4, keeps runs with many steps fast without any changes.
+One step per side effect. If the parent needs each child's result, use `step.invoke()` per
+recipient inside `Promise.all` (Day 03). Fan-out runs in parallel, so pair it with concurrency or
+throttling (Days 06 and 07) for providers with limits.
 
 ## Next
 
-The queue is moving now. Tomorrow we decide who gets to go first.
+The queue is moving. Tomorrow we decide who goes first.
