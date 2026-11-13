@@ -6,6 +6,10 @@ export const cardScheduled = eventType("card/scheduled", {
   schema: staticSchema<ScheduledCard>(),
 });
 
+export const cardScheduledBefore = eventType("card/scheduled.before", {
+  schema: staticSchema<ScheduledCard>(),
+});
+
 export const cardDeleted = eventType("card/deleted", {
   schema: staticSchema<{ cardId: string }>(),
 });

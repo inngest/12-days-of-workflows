@@ -1,11 +1,6 @@
 import { insertRows } from "@12days/shared";
-import { eventType, staticSchema } from "inngest";
 import { inngest } from "./client.js";
-import type { CardOpen } from "./events.js";
-
-const cardOpenedBefore = eventType("card/opened.before", {
-  schema: staticSchema<CardOpen>(),
-});
+import { cardOpenedBefore } from "./events.js";
 
 // No batching: every open is its own run and its own billed warehouse write.
 export const recordOpensBefore = inngest.createFunction(

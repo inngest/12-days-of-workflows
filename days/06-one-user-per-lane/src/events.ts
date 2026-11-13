@@ -5,3 +5,7 @@ export type CardRequest = { cardId: string; prompt: string; to: string; accountI
 export const cardRequested = eventType("card/requested", {
   schema: staticSchema<CardRequest>(),
 });
+
+export const cardRequestedBefore = eventType("card/requested.before", {
+  schema: staticSchema<CardRequest>(),
+});

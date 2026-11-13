@@ -14,6 +14,7 @@ export const scheduleDelivery = inngest.createFunction(
     // @lesson:start Sleep until the delivery date
     await step.sleepUntil("wait-for-delivery-date", event.data.deliverAt);
     // @lesson:end
+
     await step.run("deliver", () => sendCard(event.data));
   },
 );

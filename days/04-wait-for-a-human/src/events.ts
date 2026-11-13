@@ -6,6 +6,10 @@ export const cardRequested = eventType("card/requested", {
   schema: staticSchema<CardRequest>(),
 });
 
+export const cardRequestedBefore = eventType("card/requested.before", {
+  schema: staticSchema<CardRequest>(),
+});
+
 export const cardApproved = eventType("card/approved", {
   schema: staticSchema<{ cardId: string }>(),
 });

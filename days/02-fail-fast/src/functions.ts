@@ -10,6 +10,7 @@ export const createCard = inngest.createFunction(
     // @lesson:start Tell the sender when a card fails for good
     onFailure: async ({ event, error, step }) => {
       const card = event.data.event.data;
+
       await step.run("notify-sender", () => notifySender(card.cardId, error.message));
     },
     // @lesson:end
@@ -21,9 +22,13 @@ export const createCard = inngest.createFunction(
       if (!verdict.ok) throw new NonRetriableError(`Rejected: ${verdict.reason}`);
       // @lesson:end
     });
+
     const card = await step.run("write-text", () => writeCard(event.data));
+
     const image = await step.run("render-image", () => renderImage({ text: card.text }));
+
     await step.run("deliver", () => sendCard(event.data));
+
     return { text: card.text, image: image.url };
   },
 );

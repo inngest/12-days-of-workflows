@@ -6,8 +6,11 @@ export const createCard = inngest.createFunction(
   { id: "create-card", triggers: [cardRequested] },
   async ({ event, step }) => {
     const card = await step.run("write-text", () => writeCard(event.data));
+
     await step.run("render-image", () => renderImage({ text: card.text }));
+
     await step.run("save-draft", () => drafts.save(event.data.cardId, card.text));
+
     // @lesson:start Pause until the sender approves, or give up
     const approval = await step.waitForEvent("wait-for-approval", {
       event: cardApproved,
@@ -19,7 +22,9 @@ export const createCard = inngest.createFunction(
       return { status: "expired" };
     }
     // @lesson:end
+
     await step.run("deliver", () => sendCard(event.data));
+
     return { status: "delivered" };
   },
 );

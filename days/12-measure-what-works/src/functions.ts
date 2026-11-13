@@ -16,6 +16,7 @@ export const reactionScorer = createScorer(
       match: "data.cardId",
     });
     if (reaction === null) return null;
+
     return { name: "recipient-loved-it", value: reaction.data.loved };
   },
 );
@@ -26,6 +27,7 @@ export const createCard = inngest.createFunction(
   async ({ event, step, group, defer }) => {
     // @lesson:start Split traffic between two prompt variants
     const { prompt } = event.data;
+
     const { result, variant, experimentRef } = await group.experiment("card-tone", {
       variants: {
         classic: () => step.run("write-classic", () => writeCard({ prompt, variant: "classic" })),
@@ -36,15 +38,19 @@ export const createCard = inngest.createFunction(
     // @lesson:stub const result = await step.run("write-text", () => writeCard(event.data));
     // @lesson:stub const variant = "classic";
     // @lesson:end
+
     // @lesson:start Score now what you know now; defer what you learn later
     await step.score("score-length", { name: "fits-on-card", value: result.text.length <= 280 });
+
     defer("score-reaction", {
       function: reactionScorer,
       data: { cardId: event.data.cardId },
       experiment: experimentRef,
     });
     // @lesson:end
+
     await step.run("deliver", () => sendCard(event.data));
+
     return { variant };
   },
 );

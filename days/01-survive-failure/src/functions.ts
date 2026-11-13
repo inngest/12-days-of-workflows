@@ -7,12 +7,15 @@ export const createCard = inngest.createFunction(
   async ({ event, step }) => {
     // @lesson:start Wrap each provider call in its own step
     const card = await step.run("write-text", () => writeCard(event.data));
+
     const image = await step.run("render-image", () => renderImage({ text: card.text }));
+
     await step.run("deliver", () => sendCard(event.data));
     // @lesson:stub const card = await writeCard(event.data);
     // @lesson:stub const image = await renderImage({ text: card.text });
     // @lesson:stub await sendCard(event.data);
     // @lesson:end
+
     return { text: card.text, image: image.url };
   },
 );

@@ -16,6 +16,7 @@ export const reactionScorer = createScorer(
       match: "data.cardId",
     });
     if (reaction === null) return null;
+
     return { name: "recipient-loved-it", value: reaction.data.loved };
   },
 );
@@ -24,6 +25,7 @@ export const designCardFn = inngest.createFunction(
   { id: "design-card", triggers: [cardRequested] },
   async ({ event, step, group, defer }) => {
     const { cardId, prompt } = event.data;
+
     // @lesson:start The agent writes the card as code
     const { result, variant, experimentRef } = await group.experiment("design-prompt", {
       variants: {
@@ -34,16 +36,20 @@ export const designCardFn = inngest.createFunction(
     });
     // @lesson:stub const variant = "classic";
     // @lesson:end
+
     // @lesson:start The sandbox runs it, not our servers
     const sandbox = await step.sandbox.create("create-renderer", {
       name: `card-${cardId}`,
       vcpu: 1,
       memoryMb: 1024,
     });
+
     const first = await sandbox.commands.run("render-card", ["node", "-e", result.code]);
     // @lesson:end
+
     // @lesson:start If it breaks, the agent reads the error and revises
     let render = first;
+
     if (first.exitCode !== 0) {
       const error = first.stderr;
       const fix = await step.run("revise-design", () =>
@@ -53,20 +59,25 @@ export const designCardFn = inngest.createFunction(
     }
     // @lesson:stub const render = { stdout: "" };
     // @lesson:end
+
     // @lesson:start Durable execution keeps score
     await inngest.score.experiment({
       name: "renders-first-try",
       value: first.exitCode === 0,
       experiment: experimentRef,
     });
+
     defer("score-reaction", {
       function: reactionScorer,
       data: { cardId },
       experiment: experimentRef,
     });
+
     await sandbox.destroy("destroy-renderer");
     // @lesson:end
+
     await step.run("deliver", () => sendCard(event.data));
+
     return { variant, svg: render.stdout };
   },
 );

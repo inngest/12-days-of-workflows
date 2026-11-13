@@ -24,7 +24,9 @@ own run, with its own retries.
 
 ```ts
 const { cardId, recipients } = event.data;
+
 const deliveries = recipients.map((to) => deliveryRequested.create({ cardId, to }));
+
 await step.sendEvent("fan-out", deliveries);
 
 export const deliverCard = inngest.createFunction(
