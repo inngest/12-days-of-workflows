@@ -32,6 +32,7 @@ variant:
 
 ```ts
 await step.score("score-length", { name: "fits-on-card", value: result.text.length <= 280 });
+
 defer("score-reaction", {
   function: reactionScorer,
   data: { cardId: event.data.cardId },
@@ -52,6 +53,7 @@ export const reactionScorer = createScorer(
       match: "data.cardId",
     });
     if (reaction === null) return null;
+
     return { name: "recipient-loved-it", value: reaction.data.loved };
   },
 );

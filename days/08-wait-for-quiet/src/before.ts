@@ -1,11 +1,6 @@
 import { writeCard } from "@12days/shared";
-import { eventType, staticSchema } from "inngest";
 import { inngest } from "./client.js";
-import type { CardEdit } from "./events.js";
-
-const cardEditedBefore = eventType("card/edited.before", {
-  schema: staticSchema<CardEdit>(),
-});
+import { cardEditedBefore } from "./events.js";
 
 // No debounce: every keystroke-sized edit starts its own run and bills its own LLM call.
 export const regeneratePreviewBefore = inngest.createFunction(

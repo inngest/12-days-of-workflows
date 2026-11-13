@@ -22,7 +22,9 @@ retry, so one failure retries all 50. In the `[mail]` lines, `friend1` to `frien
 
 ```ts
 const { cardId, recipients } = event.data;
+
 const deliveries = recipients.map((to) => deliveryRequested.create({ cardId, to }));
+
 await step.sendEvent("fan-out", deliveries);
 
 export const deliverCard = inngest.createFunction(

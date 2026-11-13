@@ -163,3 +163,12 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Copy got a pass for one message per day: the masthead no longer names the lesson, "One card is easy. A rush shows who waits." is gone, and Day 12's hint no longer says which style wins.
 - The masthead stamp now reads "12 Days of Inngest · Day 6" so it can be cropped straight into a lower third.
 
+
+## Phase: Readable on camera (presenter review)
+
+- Tony walked through the days as a viewer would, and two things got in the way of the code we actually want people to look at. Neither was about Inngest. Both were about the page.
+- Every `before.ts` opened with an inline event definition: a schema, a type import and an `eventType` call, all before the first line of the naive function. That's typing noise on the one file whose job is to be glanced at. Those definitions now live in each day's `events.ts`, right beside the event they mirror, and `before.ts` just imports them. Same names, same event strings, same typed `event.data`.
+- The second note was that the handlers read as a wall. Each step is a separate thing that happens, so each one now gets a blank line, including before the final `return`. Options objects, nested callbacks and loops are untouched; this is purely breathing room between statements.
+- Inside lesson regions the blank lines sit between the real lesson statements, while the `@lesson` markers and stub lines stay exactly where they were. Lesson budgets count non-blank lines, so they didn't move.
+- Stripping the markers came up too, and we did not decide it. They all stayed in place, along with every other readability idea that was floated (shorter calls, step id renames, reflowed options).
+- The starter copies were regenerated and the README snippets updated to match the new code.

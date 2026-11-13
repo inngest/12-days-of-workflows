@@ -11,6 +11,7 @@ export const sendToEveryone = inngest.createFunction(
         await sendCard({ to, cardId: event.data.cardId });
       }
     });
+
     return { queued: event.data.recipients.length };
   },
 );

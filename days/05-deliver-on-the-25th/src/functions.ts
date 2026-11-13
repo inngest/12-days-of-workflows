@@ -10,6 +10,7 @@ export const scheduleDelivery = inngest.createFunction(
   },
   async ({ event, step }) => {
     // TODO: Sleep until the delivery date
+
     await step.run("deliver", () => sendCard(event.data));
   },
 );

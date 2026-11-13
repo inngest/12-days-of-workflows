@@ -16,11 +16,14 @@ export const createCard = inngest.createFunction(
   { id: "create-card", triggers: [cardRequested] },
   async ({ event, step }) => {
     const card = await step.run("write-text", () => writeCard(event.data));
+
     const image = await step.invoke("render-image", {
       function: renderCardImage,
       data: { text: card.text },
     });
+
     await step.run("deliver", () => sendCard(event.data));
+
     return { text: card.text, image: image.url };
   },
 );
