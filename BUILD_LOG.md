@@ -151,3 +151,15 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - Day 12b's profile pointed at `create-card` and step ids the day never uses, so its feed could never have worked. It now follows `design-card`; it is cloud-only, so that one is untested.
 - The bottom strip is now a real status bar: "Connected · 1 card in progress · 3 cards delivered · Last delivery 2:14 pm", with day-specific lines like "1 card needs your approval" or "120 card opens recorded". The lesson figures ("Billed twice", retries, duplicates) didn't go anywhere: they are the same strip, shown only in presenter mode (press `p`), so the videos still get their payoff.
 - Days 06 and 10 now draw their queue: one strip, two uses. Day 10 shows a single line where the pro card slides to the front and finishes 3rd; the "no priority" run shows it last. Day 06 shows a lane per account, so Brightside's lone card is plainly not stuck behind Acme's twenty, while the shared-lane version has it at the back. Everything is read from the runs themselves (arrival time, plan or account, step starts, finish times). The one thing the studio didn't have was when a run was queued: the Dev Server's run start time is when it began running, not when it arrived, so we read the queued-at time too.
+
+## Phase: Two tabs, a coworker, and a calmer arc
+
+- Filming wants two browser tabs, so the in-page "problem / fix" toggle is gone. Every day with a before now has `/day/06/problem` and `/day/06/fix`; days without one have a single address.
+- The tabs are labeled "Without Inngest" and "With Inngest" instead of "The problem" and "The fix", which sounded like a demo.
+- The sneaky part was shared state. The studio remembered one run cursor, one "sending" flag and one set of results, so a second tab would have wiped the first. Each side is now its own screen.
+- The two sides also share one ledger in the day's app. Instead of changing the fakes, each tab reads only the calls made by its own functions (the `-before` ones or the rest), and a send only wipes the ledger when the other tab is idle.
+- The side-by-side strip went away with the toggle. The two tabs are the comparison now; presenters still get this tab's numbers in the drawer.
+- Grandma retired. Cards now go to a coworker, Priya, with a thank-you-for-the-year message, and every send script and README says so. The shared wall page still falls back to the old address, which is not ours to change.
+- Copy got a pass for one message per day: the masthead no longer names the lesson, "One card is easy. A rush shows who waits." is gone, and Day 12's hint no longer says which style wins.
+- The masthead stamp now reads "12 Days of Inngest · Day 6" so it can be cropped straight into a lower third.
+

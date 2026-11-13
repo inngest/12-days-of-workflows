@@ -13,7 +13,7 @@ pnpm send 04 approve-before
 ```
 
 The card is written, rendered and delivered in one go. Watch the `[mail]` line: it goes to
-grandma before anyone looked at the draft.
+Priya before anyone looked at the draft.
 
 ## Fix it
 

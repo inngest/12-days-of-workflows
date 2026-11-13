@@ -5,8 +5,8 @@ export const lessonBudget = 25;
 
 const card: CardRequest = {
   cardId: "c1",
-  prompt: "Merry Christmas, Grandma. Thanks for the cookies!",
-  to: "grandma@example.com",
+  prompt: "Thanks for a great year, Priya. Happy holidays!",
+  to: "priya@example.com",
 };
 
 const grinchCard: CardRequest = { ...card, prompt: "A card from the Grinch" };

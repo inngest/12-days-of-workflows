@@ -70,7 +70,7 @@ export function wavesFor(
   const name = problem && profile.before ? profile.before.event : profile.event;
   const chaos = chaosFor(nn, form);
   const message = form.message?.trim() || "Happy holidays";
-  const to = form.to?.trim() || "grandma@example.com";
+  const to = form.to?.trim() || "priya@example.com";
 
   switch (nn) {
     case "05":

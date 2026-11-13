@@ -11,6 +11,26 @@ pnpm day 01        # terminal 1: the day and the Dev Server
 pnpm studio        # terminal 2: http://localhost:3100
 ```
 
+### Two tabs: without and with Inngest
+
+Every day with a "before" has two addresses, one per side, so both can sit in two browser tabs:
+
+| Address | Shows | Sends to |
+| --- | --- | --- |
+| `/day/06/problem` | "Without Inngest" | the `-before` function (`create-card-before`) |
+| `/day/06/fix` | "With Inngest" | the real function (`create-card`) |
+
+`/day/06` lands on the fix, and `/` opens the newest running day on its fix. Days with no before
+(04, 12, 12b) have one address, `/day/04`, and no tabs. The masthead has the two sides as links
+(this tab's side is pressed), the day stamp reads "12 Days of Inngest · Day 6" (a lower-third
+source), and a day that is not running says how to start it. Add `?presenter=1` to any address;
+the links keep it.
+
+Each tab keeps its own state (runs cursor, current run, approve button, errors, "Sending..."), so
+sending from one tab never clears the other. The two sides share the day's ledger, so each tab reads
+only its own function calls (the "-before" ones, or the rest). A send wipes the ledger only while
+the other tab is idle, after saving that tab's results; otherwise it just moves its own cursor.
+
 ### Days 12 and 12b: Inngest Cloud
 
 These two are filmed against Inngest Cloud. Set both keys and the studio switches itself, with no
@@ -31,8 +51,7 @@ pnpm studio            # terminal 2: it picks up the keys from the same shell
   page, so a button opens the runs page in a new tab (`INNGEST_ENV` picks the environment, default
   `production`).
 - **The live card** is driven by the day's own ledger of provider calls (message written, card
-  delivered), because run data in Cloud needs the Cloud REST API. There is no step trace or
-  "problem / fix" strip in this mode; follow the steps in Cloud.
+  delivered), because run data in Cloud needs the Cloud REST API. There is no step trace in this mode; follow the steps in Cloud.
 - **Without the keys**, Day 12b says what to set instead of sending, and Day 12 just runs locally.
 
 ## What you see
@@ -44,8 +63,8 @@ pnpm studio            # terminal 2: it picks up the keys from the same shell
   then the finished card. A stamp sums up the run ("Billed once", "Coal-proof").
 - **Under the hood**: the same run as the dark trace, with the real names (`step.run`,
   `step.invoke`, `step.waitForEvent`) and the function option the day teaches.
-- **The problem / The fix** (top right): sends to the day's `.before` event or the real one. The
-  last result of each side stays in a slim strip pinned to the bottom of the screen, with the side the switch points at gently highlighted. Days with no "before" (04, 12, 12b) say so.
+- **Without / With Inngest** (top right): links to the two routes above. A tab sends only to its own
+  side's event, and shows only its own feed, trace, queue and status bar.
 
 Some days pause for you: Day 04 shows **Approve the card**, Day 05 **Changed my mind: delete it**.
 
@@ -58,8 +77,9 @@ list, and loads only on first open. If the Dev Server is down it says how to res
 
 ## Presenter drawer
 
-Add `?presenter=1` (or press `p`) for the scenario launcher: the same scenarios as `pnpm send`,
-their env hints, and **Clear**. A running app cannot take a new env var, so the drawer prints the
+Add `?presenter=1` (or press `p`) for the scenario launcher: the scenarios for this tab's side (the
+`-before` ones on the problem tab), their env hints, **Clear** for this tab, and this side's lesson
+numbers along the bottom. A running app cannot take a new env var, so the drawer prints the
 line to restart with, such as `IMAGE_RATE=off pnpm day 06`. Day 12b's scenarios need the Cloud keys (see above).
 
 ## Where the data comes from
