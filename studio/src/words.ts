@@ -172,7 +172,7 @@ const WORDS: Record<string, Say> = {
     retrying: "Preparing the cards again ({n})",
     failed: "We could not prepare the cards. Nothing was sent.",
   },
-  "send-all": {
+  "deliver-all": {
     doing: "Delivering to everyone, one by one",
     done: "Everyone has their card",
     retrying: "Having trouble delivering, starting the list again ({n})",

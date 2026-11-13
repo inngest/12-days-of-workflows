@@ -179,9 +179,9 @@ export const PROFILES: Record<string, Profile> = {
     showsCard: true,
   },
   "05": {
-    event: "card/approved",
+    event: "card/scheduled",
     before: {
-      event: "card/approved.before",
+      event: "card/scheduled.before",
       main: ["schedule-delivery-before"],
       plan: ["wait-for-delivery-date", "deliver"],
       flow: { name: "no cancelOn", detail: "a deleted card still goes out" },
@@ -268,14 +268,14 @@ export const PROFILES: Record<string, Profile> = {
     event: "card/bulk-send",
     before: {
       event: "card/bulk-send.before",
-      main: ["bulk-send-before"],
-      plan: ["send-all"],
+      main: ["send-to-everyone-before"],
+      plan: ["deliver-all"],
       flow: { name: "one big step", detail: "a retry starts over at person 1" },
     },
     fields: ["message", "recipients", "trouble"],
     defaults: { message: MESSAGE, recipients: "20", trouble: "on" },
     trouble: { label: "Mail service", off: "Reliable", on: "Fails once, halfway through" },
-    main: ["bulk-send", "deliver-card"],
+    main: ["send-to-everyone", "deliver-card"],
     plan: ["fan-out", "deliver"],
     flow: { name: "fan-out", detail: "one event per recipient" },
     shortcut: {
@@ -316,7 +316,7 @@ export const PROFILES: Record<string, Profile> = {
     event: "card/opened",
     before: {
       event: "card/opened.before",
-      main: ["record-open-before"],
+      main: ["record-opens-before"],
       plan: ["insert-open"],
       flow: { name: "no batching", detail: "one run and one write per open" },
     },
