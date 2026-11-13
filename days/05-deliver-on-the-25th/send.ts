@@ -5,7 +5,7 @@ export const lessonBudget = 25;
 
 const scheduledCard = (inMs: number): ScheduledCard => ({
   cardId: "c1",
-  to: "priya@example.com",
+  to: "sam@example.com",
   deliverAt: new Date(Date.now() + inMs).toISOString(),
 });
 

@@ -20,7 +20,13 @@ if (!arg || (cloud && arg === "all")) {
 }
 if (cloud) requireEnv(["INNGEST_SIGNING_KEY", "INNGEST_EVENT_KEY"]);
 
-const days = arg === "all" ? listDays().map((name) => resolveDay(dayId(name))) : [resolveDay(arg)];
+// Day 12b is parked, so "all" leaves it out; `pnpm day 12b` still starts it.
+const days =
+  arg === "all"
+    ? listDays()
+        .filter((name) => dayId(name) !== "12b")
+        .map((name) => resolveDay(dayId(name)))
+    : [resolveDay(arg)];
 const children: ChildProcess[] = await Promise.all(
   days.map(async (day) => startApp(day, { watch: true, cloud, env: await sharedScenarioEnv(day) })),
 );

@@ -5,8 +5,8 @@ export const lessonBudget = 15;
 
 const card: CardRequest = {
   cardId: "c1",
-  prompt: "Thanks for a great year, Priya. Happy holidays!",
-  to: "priya@example.com",
+  prompt: "Happy holidays, Sam!",
+  to: "sam@example.com",
 };
 
 // retryInMs makes each retry come about 1 s later, so the demo never waits on backoff.

@@ -39,8 +39,6 @@ function chaosFor(nn: string, form: Form): Chaos | undefined {
   switch (nn) {
     case "01":
       return { image: { failTimes: 2, retryInMs: 1000 } };
-    case "02":
-      return { llm: { failTimes: 1, status: 429, retryAfterMs: 5000 } };
     case "03":
       return { image: { failTimes: 5, retryInMs: 1000 } };
     case "09": {
@@ -70,7 +68,7 @@ export function wavesFor(
   const name = problem && profile.before ? profile.before.event : profile.event;
   const chaos = chaosFor(nn, form);
   const message = form.message?.trim() || "Happy holidays";
-  const to = form.to?.trim() || "priya@example.com";
+  const to = form.to?.trim() || "sam@example.com";
 
   switch (nn) {
     case "05":

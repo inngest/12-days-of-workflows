@@ -25,11 +25,11 @@ export type Field = {
 
 /** Every field the form can show. A day picks from this list. */
 export const FIELDS: Record<Exclude<FieldId, "trouble">, Field> = {
-  to: { label: "Send to", kind: "text", placeholder: "priya@example.com" },
+  to: { label: "Send to", kind: "text", placeholder: "sam@example.com" },
   message: {
     label: "What should it say?",
     kind: "textarea",
-    placeholder: "Thanks for a great year",
+    placeholder: "Happy holidays, Sam",
   },
   tone: {
     label: "Tone",
@@ -123,8 +123,8 @@ export type Profile = {
   needsCloud?: boolean; // runs locally, but the studio follows it in Inngest Cloud when keys are set
 };
 
-const MESSAGE = "Thanks for a great year. Happy holidays!";
-const TO = "priya@example.com";
+const MESSAGE = "Happy holidays, Sam!";
+const TO = "sam@example.com";
 const cardFields: FieldId[] = ["to", "message", "tone"];
 
 export const PROFILES: Record<string, Profile> = {
@@ -145,9 +145,8 @@ export const PROFILES: Record<string, Profile> = {
       main: ["create-card-before"],
       plan: ["moderate", "write-text", "render-image", "deliver"],
     },
-    fields: [...cardFields, "trouble"],
-    defaults: { to: TO, message: "A card from the Grinch", tone: "classic", trouble: "off" },
-    trouble: { label: "Writing service", off: "Normal", on: "Busy: asks us to wait 5 s" },
+    fields: cardFields,
+    defaults: { to: TO, message: "A card from the Grinch", tone: "classic" },
     main: ["create-card", "create-card-failure"],
     plan: ["moderate", "write-text", "render-image", "deliver"],
     tip: "Try an idea with the Grinch in it, then one without.",

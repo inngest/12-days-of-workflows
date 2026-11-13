@@ -1,3 +1,5 @@
+> **Parked:** not part of the 12 episodes for now. The code stays here, but nothing links to it.
+
 # Day 12b: Can the agent design the card, safely?
 
 ## The problem

@@ -65,7 +65,7 @@ function showNotice(text) {
 
 function draw(s) {
   drawDevPanel(s);
-  if (s.days.length === 0 || !s.profile) {
+  if (!s.profile) {
     $("stage").hidden = true;
     setHtml($("days"), "");
     $("day-stamp").hidden = true;

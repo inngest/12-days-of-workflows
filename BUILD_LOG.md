@@ -159,7 +159,7 @@ Notes on how this repo was built, one section per phase. These are raw material 
 - The sneaky part was shared state. The studio remembered one run cursor, one "sending" flag and one set of results, so a second tab would have wiped the first. Each side is now its own screen.
 - The two sides also share one ledger in the day's app. Instead of changing the fakes, each tab reads only the calls made by its own functions (the `-before` ones or the rest), and a send only wipes the ledger when the other tab is idle.
 - The side-by-side strip went away with the toggle. The two tabs are the comparison now; presenters still get this tab's numbers in the drawer.
-- Grandma retired. Cards now go to a coworker, Priya, with a thank-you-for-the-year message, and every send script and README says so. The shared wall page still falls back to the old address, which is not ours to change.
+- Grandma retired. Cards now go to a coworker, Sam, with a "Happy holidays, Sam!" message, and every send script and README says so. The shared wall page still falls back to the old address, which is not ours to change.
 - Copy got a pass for one message per day: the masthead no longer names the lesson, "One card is easy. A rush shows who waits." is gone, and Day 12's hint no longer says which style wins.
 - The masthead stamp now reads "12 Days of Inngest · Day 6" so it can be cropped straight into a lower third.
 

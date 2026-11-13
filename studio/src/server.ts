@@ -196,7 +196,9 @@ function cardOf(
 
 async function readState(wanted: string | undefined, wantedSide: unknown): Promise<State> {
   const [days, devServer] = await Promise.all([findAliveDays(), devServerIsUp()]);
-  const newest = [...days].sort((a, b) => b.lastActivity - a.lastActivity)[0];
+  // Day 12b is parked: it is not offered in the day list or picked for "/", but its route works.
+  const shown = days.filter((d) => d.nn !== "12b");
+  const newest = [...shown].sort((a, b) => b.lastActivity - a.lastActivity)[0];
   // A route names its day: if that day is not running, say so instead of showing another one.
   const active = wanted ? days.find((d) => d.nn === wanted) : newest;
   const side = sideFor(
@@ -205,7 +207,7 @@ async function readState(wanted: string | undefined, wantedSide: unknown): Promi
   );
 
   const state: State = {
-    days,
+    days: shown,
     day: active?.nn ?? null,
     side,
     missing: wanted && !active ? wanted : null,
