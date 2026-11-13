@@ -167,10 +167,10 @@ function lineOf(
     else if (ofGroup.length > 1)
       text = `${loved} of ${ofGroup.length} recipients loved it${silent ? `, ${silent} did not react` : ""}`;
   } else if (group.id === "notify-sender" && status === "done") {
-    // The sender is told why: show the reason itself, not just that they were told.
+    // Show the reason itself, the way a product would.
     const told = entries.filter((e) => e.provider === "mail" && e.op === "notifySender").at(-1);
     const reason = String(told?.meta?.reason ?? "").replace(/^Rejected: /, "");
-    if (reason) text = `You were told why: ${reason}`;
+    if (reason) text = `Card rejected: ${reason}`;
   } else if (group.id === "card-tone" && status === "done") {
     const picked = ofGroup.map((r) => String(outputOf(r).variant ?? "")).filter(Boolean);
     const tally = (v: string) => picked.filter((p) => p === v).length;

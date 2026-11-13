@@ -44,61 +44,69 @@ const position = (f: Facts, id: string) => f.deliveryOrder.indexOf(id) + 1;
 
 const figures: Record<string, Proof> = {
   "01": (f) => [
-    { value: `Billed ${times(f.llmCalls)}`, label: "for writing one message" },
+    { value: `Billed ${times(f.llmCalls)}`, label: "for writing your message" },
     {
-      value: plural(f.imageCalls, "painting try", "painting tries"),
-      label: "until the artwork worked",
+      value: plural(f.imageCalls, "artwork attempt"),
+      label: "until it worked",
     },
     { value: plural(f.emailsSent, "email"), label: "delivered" },
   ],
   "02": (f) => [
-    { value: plural(f.retries, "retry", "retries"), label: "spent on one card" },
-    { value: f.notified > 0 ? "Sender told" : "Nobody told", label: "why it did not go out" },
+    { value: plural(f.retries, "retry", "retries"), label: "on this card" },
+    {
+      value: f.notified > 0 ? "Sender notified" : "Sender not notified",
+      label: "why the card was rejected",
+    },
     {
       value: f.running > 0 ? "Still trying" : f.failed > 0 ? "Stopped at once" : "Finished",
-      label: "the run",
+      label: "card status",
     },
   ],
   "03": (f) => [
     {
-      value: f.failed > 0 ? "Gave up" : f.done > 0 ? "Delivered" : "In progress",
+      value: f.failed > 0 ? "Not delivered" : f.done > 0 ? "Delivered" : "In progress",
       label: "the card",
     },
-    { value: plural(f.imageCalls, "painting try", "painting tries"), label: "at the artwork" },
+    { value: plural(f.imageCalls, "artwork attempt"), label: "for this card" },
     { value: plural(f.emailsSent, "email"), label: "delivered" },
   ],
   "05": (f) => [
     {
-      value: f.cancelled > 0 ? "Run cancelled" : f.acted ? "Run kept going" : "Run on schedule",
-      label: f.acted ? "after the card was deleted" : "nobody deleted the card",
+      value:
+        f.cancelled > 0
+          ? "Delivery cancelled"
+          : f.acted
+            ? "Delivery continued"
+            : "Delivery on schedule",
+      label: f.acted ? "after the card was deleted" : "card not deleted",
     },
     { value: plural(f.emailsSent, "email"), label: "sent to the inbox" },
   ],
   "06": (f) => [
-    { value: `Brightside came ${nth(position(f, "b1"))}`, label: `of ${f.emailsSent} delivered` },
+    { value: `Brightside delivered ${nth(position(f, "b1"))}`, label: `of ${f.emailsSent} cards` },
     { value: plural(f.emailsSent, "card"), label: "delivered in all" },
   ],
   "07": (f) => [
-    { value: plural(f.rateLimited, "rate-limit error"), label: "from the painter (429)" },
-    { value: plural(f.imageCalls, "painter call"), label: "to finish the cards" },
-    { value: `${f.emailsSent} delivered`, label: "cards in the inbox" },
+    { value: plural(f.rateLimited, "rate-limit error"), label: "from the image service (429)" },
+    { value: plural(f.imageCalls, "image request"), label: "to finish the cards" },
+    { value: `${f.emailsSent} delivered`, label: "cards in inboxes" },
   ],
   "08": (f) => [
     { value: `Billed ${times(f.llmCalls)}`, label: "for the preview" },
-    { value: plural(f.runs, "run"), label: "started by the edits" },
+    { value: plural(f.runs, "run"), label: "started by your edits" },
   ],
   "09": (f) => [
     { value: plural(f.duplicates, "duplicate"), label: "cards sent twice" },
     { value: plural(f.emailsSent, "email"), label: "sent in all" },
-    { value: plural(f.retries, "retry", "retries"), label: "after the mail elf slipped" },
+    { value: plural(f.retries, "retry", "retries"), label: "after a delivery hiccup" },
   ],
   "10": (f) => [
-    { value: `Pro card 1 came ${nth(position(f, "p1"))}`, label: `of ${f.emailsSent} delivered` },
-    { value: `Pro card 2 came ${nth(position(f, "p2"))}`, label: "same queue" },
+    { value: `Pro card 1 delivered ${nth(position(f, "p1"))}`, label: `of ${f.emailsSent} cards` },
+    { value: `Pro card 2 delivered ${nth(position(f, "p2"))}`, label: "same queue" },
   ],
   "11": (f) => [
-    { value: plural(f.warehouseWrites, "write"), label: "to the warehouse" },
-    { value: plural(f.runs, "run"), label: "started by the opens" },
+    { value: plural(f.warehouseWrites, "write"), label: "to the analytics store" },
+    { value: plural(f.runs, "run"), label: "started by card opens" },
   ],
 };
 
@@ -111,7 +119,7 @@ export function proofOf(nn: string, f: Facts): Figure[] {
 const COUNT_WORDS = ["no", "once", "twice", "three times", "four times", "five times"];
 const retriedWords = (n: number) => `Retried ${COUNT_WORDS[n] ?? `${n} times`}`;
 
-/** A short, tongue-in-cheek verdict that is true of the run. Null while there is nothing to say. */
+/** A short verdict, worded like a product, that is true of the run. Null while there is nothing to say. */
 export function stampOf(nn: string, f: Facts, problem: boolean): string | null {
   if (f.runs === 0) return null;
   const over = f.running === 0;
@@ -126,36 +134,49 @@ export function stampOf(nn: string, f: Facts, problem: boolean): string | null {
     "03": () => (f.failed > 0 ? "Gave up" : over && f.retries > 0 ? retriedWords(f.retries) : null),
     "04": () => {
       const status = (f.output as { status?: string } | null)?.status;
-      if (f.running > 0) return "Awaiting the sender";
-      return status === "expired" ? "Elf timed out" : status === "delivered" ? "Approved" : null;
+      if (f.running > 0) return "Awaiting approval";
+      return status === "expired"
+        ? "Approval timed out"
+        : status === "delivered"
+          ? "Approved"
+          : null;
     },
     "05": () =>
       f.cancelled > 0
         ? "Cancelled in time"
         : over && f.emailsSent > 0
           ? f.acted && problem
-            ? "Delivered anyway"
+            ? "Delivered after deletion"
             : "Delivered on time"
           : null,
-    "06": () => (over && position(f, "b1") > 0 ? `Brightside ${nth(position(f, "b1"))}` : null),
+    "06": () =>
+      over && position(f, "b1") > 0 ? `Brightside delivered ${nth(position(f, "b1"))}` : null,
     "07": () =>
-      over && f.emailsSent > 0 ? (f.rateLimited > 0 ? `${f.rateLimited}x 429` : "Zero 429s") : null,
+      over && f.emailsSent > 0
+        ? f.rateLimited > 0
+          ? `${f.rateLimited} rate-limit errors`
+          : "No rate-limit errors"
+        : null,
     "08": () => (over ? (f.llmCalls === 1 ? "Billed once" : `Billed ${times(f.llmCalls)}`) : null),
     "09": () =>
       over && f.emailsSent > 0
         ? f.duplicates === 0
-          ? "Coal-proof"
+          ? "No duplicates"
           : `${f.duplicates} sent twice`
         : null,
     "10": () =>
-      over && position(f, "p1") > 0 ? (position(f, "p1") <= 6 ? "Pro first" : "Pro waited") : null,
+      over && position(f, "p1") > 0
+        ? position(f, "p1") <= 6
+          ? "Pro delivered early"
+          : "Pro delivered late"
+        : null,
     "11": () => (over && f.warehouseWrites > 0 ? plural(f.warehouseWrites, "write") : null),
     "12": () =>
       over && f.emailsSent > 0
         ? f.emailsSent > 1
-          ? `${f.emailsSent} cards tested`
+          ? `${f.emailsSent} cards compared`
           : f.acted
-            ? "Loved it"
+            ? "Recipient loved it"
             : "Delivered"
         : null,
   };

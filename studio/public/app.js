@@ -224,7 +224,8 @@ function drawLive(s) {
     ? `<button type="button" class="button" id="action">${esc(live.action)}</button>`
     : "";
   const card = live.card
-    ? `<article class="holiday-card"><div class="scene">${SCENE}</div>
+    ? `<article class="holiday-card"${live.card.draft ? " data-draft" : ""}>
+        ${live.card.draft ? `<p class="draft-badge">Draft: waiting for your approval</p>` : ""}<div class="scene">${SCENE}</div>
         <h3 class="holiday-card-title">${esc(live.card.title)}</h3>
         <p class="holiday-card-message">${esc(live.card.message)}</p>
         ${live.card.to ? `<p class="holiday-card-from">To ${esc(live.card.to)}</p>` : ""}</article>`

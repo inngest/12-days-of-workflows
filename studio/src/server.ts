@@ -117,7 +117,7 @@ type Live = {
   finished: number;
   total: number;
   feed: FeedLine[];
-  card: { title: string; message: string; to: string } | null;
+  card: { title: string; message: string; to: string; draft?: boolean } | null;
   stamp: string | null;
   figures: Figure[]; // this side's lesson numbers, for the presenter drawer
   queue: QueueView | null; // who is being served and who waits (Days 06 and 10)
@@ -183,11 +183,23 @@ function cardOf(
     (r) => r.status === "done" && typeof (r.output as { text?: string } | null)?.text === "string",
   );
   const wrote = last ? written.find((r) => r.cardId === last.cardId) : written.at(-1);
+  // A card waiting for its sender's approval has not been delivered yet: show it as a draft.
+  const drafted = tracked.find((r) => r.draft && (!last || r.cardId === last.cardId));
+  const waiting = tracked.find((r) => r.status === "running" && r.draft);
+  if (!last && !wrote && waiting?.draft) {
+    return {
+      title: mine?.title || waiting.data.prompt?.toString() || "Happy holidays",
+      message: waiting.draft,
+      to: mine?.to ?? "",
+      draft: true,
+    };
+  }
   if (!last && !wrote) return null;
   return {
     title: mine?.title || last?.prompt || wrote?.data.prompt?.toString() || "Happy holidays",
     message:
       (wrote?.output as { text?: string } | null)?.text ??
+      drafted?.draft ??
       mine?.title ??
       "On its way to the inbox.",
     to: last?.to ?? mine?.to ?? "",
