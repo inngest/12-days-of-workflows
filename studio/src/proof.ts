@@ -142,13 +142,7 @@ export function stampOf(nn: string, f: Facts, problem: boolean): string | null {
           : null;
     },
     "05": () =>
-      f.cancelled > 0
-        ? "Cancelled in time"
-        : over && f.emailsSent > 0
-          ? f.acted && problem
-            ? "Delivered after deletion"
-            : "Delivered on time"
-          : null,
+      f.cancelled > 0 ? "Cancelled in time" : over && f.emailsSent > 0 ? "Delivered on time" : null,
     "06": () =>
       over && position(f, "b1") > 0 ? `Brightside delivered ${nth(position(f, "b1"))}` : null,
     "07": () =>

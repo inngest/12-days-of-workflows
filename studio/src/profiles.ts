@@ -115,7 +115,14 @@ export type Profile = {
   /** One click that shows the lesson: a scenario from the day's send.ts (+ "-before" for the problem). */
   shortcut?: { label: string; hint: string; scenario: string };
   /** A button that appears while the run waits on step `when`, and sends an event for the card. */
-  action?: { label: string; event: string; data?: Record<string, unknown>; when: string };
+  action?: {
+    label: string;
+    busy: string; // the button's text from the click until the run reacts
+    unavailable?: string; // shown instead when the click can do nothing (the day's "before" version)
+    event: string;
+    data?: Record<string, unknown>;
+    when: string;
+  };
   holding?: string; // what to say while events are held back and no run has started yet
   tip?: string; // one calm line under the Send button
   showsCard: boolean; // does a finished run produce a card worth showing?
@@ -174,7 +181,12 @@ export const PROFILES: Record<string, Profile> = {
     defaults: { to: TO, message: MESSAGE, tone: "warm" },
     main: ["create-card"],
     plan: ["write-text", "render-image", "save-draft", "wait-for-approval", "deliver"],
-    action: { label: "Approve the card", event: "card/approved", when: "wait-for-approval" },
+    action: {
+      label: "Approve the card",
+      busy: "Approving...",
+      event: "card/approved",
+      when: "wait-for-approval",
+    },
     tip: "The card waits for you. Approve it to send it on its way.",
     showsCard: true,
   },
@@ -193,13 +205,15 @@ export const PROFILES: Record<string, Profile> = {
     plan: ["wait-for-delivery-date", "deliver"],
     flow: { name: "cancelOn", detail: "card/deleted stops the run" },
     action: {
-      label: "Changed my mind: delete it",
+      label: "Cancel delivery",
+      busy: "Cancelling...",
+      unavailable: "We can't cancel this delivery. It will still be sent on schedule.",
       event: "card/deleted",
       when: "wait-for-delivery-date",
     },
     shortcut: {
-      label: "Send it, then change my mind",
-      hint: "Deletes the card 2 seconds after it is scheduled",
+      label: "Schedule, then cancel",
+      hint: "Cancels the delivery 2 seconds after it is scheduled",
       scenario: "delete-before-delivery",
     },
     showsCard: false,
@@ -344,6 +358,7 @@ export const PROFILES: Record<string, Profile> = {
     flow: { name: "experiment", detail: "classic or warm, 50 / 50" },
     action: {
       label: "The recipient loved it",
+      busy: "Sending reaction...",
       event: "card/reacted",
       data: { loved: true },
       when: "wait-for-reaction",

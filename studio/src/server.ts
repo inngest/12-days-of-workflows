@@ -123,6 +123,8 @@ type Live = {
   queue: QueueView | null; // who is being served and who waits (Days 06 and 10)
   status: string[]; // the status bar: calm product facts, never lesson figures
   action: string | null; // the label of a button that fits this moment, if any
+  actionNote: string | null; // why a pressed button did nothing
+  actionBusy: string | null; // what that button says while its click is on its way
 };
 
 type State = {
@@ -319,6 +321,8 @@ async function readState(wanted: string | undefined, wantedSide: unknown): Promi
       inProgress: cloud ? facts.running : mainFn.filter((r) => r.status === "running").length,
     }),
     action,
+    actionNote: problem && screen.acted ? (profile.action?.unavailable ?? null) : null,
+    actionBusy: action ? (profile.action?.busy ?? null) : null,
   };
   if (cloud) state.live.status[0] = "Connected to Inngest Cloud";
   if (focus)
