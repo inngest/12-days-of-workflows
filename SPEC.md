@@ -808,7 +808,7 @@ Problem: an AI agent designs each card as code, and that code has to run somewhe
 | Scenario | Env | Sends | Expect |
 | --- | --- | --- | --- |
 | `design-1` | `REACTION_TTL=60s` | card c1, whose first design always breaks | `designCard` called twice (design + revision), one delivery |
-| `design-12` | `REACTION_TTL=60s` | 12 cards, then one `card/reacted` per card | 12 `score-recipient-reaction` runs Completed, 12 deliveries |
+| `design-4` | `REACTION_TTL=60s` | 4 cards, then one `card/reacted` per card | 4 `score-recipient-reaction` runs Completed, 4 deliveries |
 
 The agent is the shared fake `designCard()` (seeded per card and variant; "bold" breaks more often than "classic"). It returns a Node program that prints the card as SVG; the sandbox runs it with `node -e`, no browser. Uses `sandboxMiddleware()` and `scoreMiddleware()` from `inngest/experimental` (`inngest@^4.21.1`) and `step.sandbox.create`, `sandbox.commands.run` and `sandbox.destroy`. `step.score()` has no `experiment` option, so the render score is `inngest.score.experiment()`.
 

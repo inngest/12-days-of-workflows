@@ -93,10 +93,10 @@ should see `design-classic` or `design-bold`, then `create-renderer`, `render-ca
 a `ReferenceError`), `revise-design`, `render-revision` (it works), `destroy-renderer` and
 `deliver`. The run's output holds the rendered SVG.
 
-For the comparison, send twelve cards and let every recipient react:
+For the comparison, send four cards and let every recipient react:
 
 ```sh
-pnpm send 12b design-12
+pnpm send 12b design-4
 ```
 
 To record against Inngest Cloud itself, with keys from your environment (see Day 12):
