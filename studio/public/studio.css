@@ -5,21 +5,16 @@
   display: none !important;
 }
 
-/* Masthead: the brand on the left, the day stamp and the problem/fix switch on the right. */
+/* Masthead: the brand on the left, the day stamp and the without/with Inngest tabs on the right. */
 .masthead-side {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
 }
-.masthead-note {
-  margin: 0;
-  color: var(--night-soft);
-  font-size: var(--text-small);
-}
-.masthead .switch-option:disabled {
-  opacity: 0.55;
-  cursor: default;
+.masthead a.switch-option,
+.studio-days a.button {
+  text-decoration: none;
 }
 .studio-days {
   display: flex;

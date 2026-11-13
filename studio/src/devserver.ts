@@ -82,9 +82,16 @@ type RunsPage = {
   };
 };
 
-/** Cancels every run queued since `since` that has not finished, so a cleared screen stays quiet. */
-export async function cancelUnfinished(since: number): Promise<void> {
+/**
+ * Cancels the runs queued since `since` that have not finished, so a cleared screen stays quiet.
+ * `mine` says which functions (by slug) belong to the screen being cleared.
+ */
+export async function cancelUnfinished(
+  since: number,
+  mine: (slug: string) => boolean,
+): Promise<void> {
   for (const run of await listRuns(since)) {
+    if (!mine(run.slug)) continue;
     if (run.status !== "RUNNING" && run.status !== "QUEUED") continue;
     await gql(`mutation { cancelRun(runID: "${run.id}") { id } }`).catch(() => {});
   }

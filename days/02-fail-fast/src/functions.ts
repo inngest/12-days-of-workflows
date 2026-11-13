@@ -1,12 +1,5 @@
-import {
-  checkPrompt,
-  notifySender,
-  ProviderError,
-  renderImage,
-  sendCard,
-  writeCard,
-} from "@12days/shared";
-import { NonRetriableError, RetryAfterError } from "inngest";
+import { checkPrompt, notifySender, renderImage, sendCard, writeCard } from "@12days/shared";
+import { NonRetriableError } from "inngest";
 import { inngest } from "./client.js";
 import { cardRequested } from "./events.js";
 
@@ -28,18 +21,7 @@ export const createCard = inngest.createFunction(
       if (!verdict.ok) throw new NonRetriableError(`Rejected: ${verdict.reason}`);
       // @lesson:end
     });
-    const card = await step.run("write-text", async () => {
-      try {
-        return await writeCard(event.data);
-      } catch (err) {
-        // @lesson:start Retry exactly when the provider says to
-        if (err instanceof ProviderError && err.status === 429) {
-          throw new RetryAfterError("LLM rate limited", err.retryAfterMs ?? "1m", { cause: err });
-        }
-        // @lesson:end
-        throw err;
-      }
-    });
+    const card = await step.run("write-text", () => writeCard(event.data));
     const image = await step.run("render-image", () => renderImage({ text: card.text }));
     await step.run("deliver", () => sendCard(event.data));
     return { text: card.text, image: image.url };

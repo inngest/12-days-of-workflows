@@ -54,10 +54,8 @@ zero after.
 
 ## In your app
 
-Throttling limits how many runs **start** per period. Day 06's concurrency limits how many run
-**at once**. Use throttle when the provider counts requests over time, and concurrency when it
-counts open connections or your own capacity. Throttle counts run starts, not steps, so put it on
-a function that makes one provider call per run. Add a `key` to throttle per customer API key.
+Throttle limits how many runs **start** per period (Day 06 limited how many run at once). Put it on
+a function that makes one provider call per run, and add a `key` to throttle per customer API key.
 
 ## Next
 

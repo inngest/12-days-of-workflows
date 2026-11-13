@@ -45,28 +45,55 @@ const KEYS_MISSING =
 
 // ---------- What the studio remembers between requests ----------
 
-// Runs queued before this moment are hidden. "Clear" and every send move it forward.
-let since = 0;
-let sending = false;
-let sendError: string | null = null;
-let cardNo = 0; // cards sent from this screen: the "No." on the trace
+// Each side of each day is its own screen, so a tab on the problem route and a tab on the fix
+// route never touch each other's runs, cursor, button state or error.
+type Side = "problem" | "fix";
 
-/** What was last sent from this screen. */
-type Sent = { day: string; problem: boolean; cardId: string; title: string; to: string };
-let sent: Sent | null = null;
-let focusId: string | null = null;
-let acted = false; // an action button (approve, delete, react) was pressed for this run
+/** What was last sent from a screen. */
+type Sent = { cardId: string; title: string; to: string; no: string };
 
-/** The last result of each side, per day. The ledger is wiped on every send, so we keep a copy. */
-type Snapshot = {
-  figures: Figure[];
-  stamp: string | null;
-  settled: boolean;
-  finished: boolean; // false while the run is still going
-  interrupted?: boolean; // the other side started before this run finished
+type Screen = {
+  since: number; // runs queued before this moment are hidden. "Clear" and every send move it forward
+  sending: boolean;
+  error: string | null;
+  sent: Sent | null;
+  focusId: string | null;
+  acted: boolean; // an action button (approve, delete, react) was pressed for this run
+  busy: boolean; // the last read found runs going: the other tab must not wipe the shared ledger
+  kept: LedgerEntry[]; // this side's ledger entries, saved when the other side wiped the ledger
 };
-const snapshots = new Map<string, { problem?: Snapshot; fix?: Snapshot }>();
-let quiet = { key: "", since: 0 }; // when the numbers last changed: a run is "settled" after 2 quiet seconds
+
+const screens = new Map<string, Screen>();
+let cardNo = 0; // cards sent from any screen: the "No." on the trace
+
+function screenOf(day: string, side: Side): Screen {
+  const key = `${day}/${side}`;
+  let screen = screens.get(key);
+  if (!screen) {
+    screen = {
+      since: 0,
+      sending: false,
+      error: null,
+      sent: null,
+      focusId: null,
+      acted: false,
+      busy: false,
+      kept: [],
+    };
+    screens.set(key, screen);
+  }
+  return screen;
+}
+
+/** The problem side runs the "-before" functions; everything else is the fix. */
+const isBefore = (fn: string | undefined) => fn?.endsWith("-before") ?? false;
+const onSide = (side: Side) => (item: { fn?: string }) =>
+  isBefore(item.fn) === (side === "problem");
+
+/** A request's side. Days with no "before" only have a fix. */
+function sideFor(profile: Profile | undefined, raw: unknown): Side {
+  return raw === "problem" && profile?.before !== undefined ? "problem" : "fix";
+}
 
 // ---------- One second of state ----------
 
@@ -92,6 +119,7 @@ type Live = {
   feed: FeedLine[];
   card: { title: string; message: string; to: string } | null;
   stamp: string | null;
+  figures: Figure[]; // this side's lesson numbers, for the presenter drawer
   queue: QueueView | null; // who is being served and who waits (Days 06 and 10)
   status: string[]; // the status bar: calm product facts, never lesson figures
   action: string | null; // the label of a button that fits this moment, if any
@@ -100,6 +128,9 @@ type Live = {
 type State = {
   days: AliveDay[];
   day: string | null;
+  side: Side;
+  /** The day the route asked for, when it is not running. */
+  missing: string | null;
   devServer: boolean;
   /** Cloud mode: the day runs in Inngest Cloud. `needed` days without keys show how to set them. */
   cloud: { active: boolean; needed: boolean; url: string; message: string | null };
@@ -107,7 +138,6 @@ type State = {
   scenarios: ScenarioInfo[];
   live: Live | null;
   trace: (TraceView & { no: string }) | null;
-  compare: { problem: Snapshot | null; fix: Snapshot | null };
   sending: boolean;
   error: string | null;
 };
@@ -141,7 +171,12 @@ function publicProfile(nn: string, title: string, profile: Profile): PublicProfi
 }
 
 /** The card shown once something has been delivered (or, for previews, written). */
-function cardOf(profile: Profile, tracked: RunView[], summary: LedgerSummary): Live["card"] {
+function cardOf(
+  profile: Profile,
+  tracked: RunView[],
+  summary: LedgerSummary,
+  mine: Sent | null,
+): Live["card"] {
   if (!profile.showsCard) return null;
   const last = summary.lastDelivery;
   const written = tracked.filter(
@@ -149,7 +184,6 @@ function cardOf(profile: Profile, tracked: RunView[], summary: LedgerSummary): L
   );
   const wrote = last ? written.find((r) => r.cardId === last.cardId) : written.at(-1);
   if (!last && !wrote) return null;
-  const mine = sent?.title ? sent : null;
   return {
     title: mine?.title || last?.prompt || wrote?.data.prompt?.toString() || "Happy holidays",
     message:
@@ -160,47 +194,38 @@ function cardOf(profile: Profile, tracked: RunView[], summary: LedgerSummary): L
   };
 }
 
-/**
- * Keeps the latest numbers for the side that is running, until its run settles (nothing running
- * and nothing changing for 2 seconds). After that the copy is frozen, so the other side's run
- * cannot touch it.
- */
-function remember(
-  nn: string,
-  problem: boolean,
-  entry: Pick<Snapshot, "figures" | "stamp">,
-  key: string,
-  over: boolean,
-) {
-  const side = problem ? "problem" : "fix";
-  const stored = snapshots.get(nn) ?? {};
-  if (stored[side]?.settled) return;
-  if (quiet.key !== key) quiet = { key, since: Date.now() };
-  const settled = over && Date.now() - quiet.since >= 2000;
-  snapshots.set(nn, { ...stored, [side]: { ...entry, settled, finished: over } });
-}
-
-async function readState(wanted: string | undefined): Promise<State> {
+async function readState(wanted: string | undefined, wantedSide: unknown): Promise<State> {
   const [days, devServer] = await Promise.all([findAliveDays(), devServerIsUp()]);
-  const newest = [...days].sort((a, b) => b.lastActivity - a.lastActivity)[0];
-  const active = days.find((d) => d.nn === wanted) ?? newest;
+  // Day 12b is parked: it is not offered in the day list or picked for "/", but its route works.
+  const shown = days.filter((d) => d.nn !== "12b");
+  const newest = [...shown].sort((a, b) => b.lastActivity - a.lastActivity)[0];
+  // A route names its day: if that day is not running, say so instead of showing another one.
+  const active = wanted ? days.find((d) => d.nn === wanted) : newest;
+  const side = sideFor(
+    wanted ? PROFILES[wanted] : active ? PROFILES[active.nn] : undefined,
+    wantedSide,
+  );
 
   const state: State = {
-    days,
+    days: shown,
     day: active?.nn ?? null,
+    side,
+    missing: wanted && !active ? wanted : null,
     devServer,
     cloud: { active: false, needed: false, url: CLOUD_URL, message: null },
     profile: null,
     scenarios: [],
     live: null,
     trace: null,
-    compare: { problem: null, fix: null },
-    sending,
-    error: sendError,
+    sending: false,
+    error: null,
   };
   if (!active) return state;
   const profile = PROFILES[active.nn];
   if (!profile) return state;
+  const screen = screenOf(active.nn, side);
+  state.sending = screen.sending;
+  state.error = screen.error;
   state.profile = publicProfile(active.nn, active.title, profile);
   const cloud = cloudModeFor(active.nn);
   const needed = Boolean(profile.cloudOnly || profile.needsCloud);
@@ -214,36 +239,32 @@ async function readState(wanted: string | undefined): Promise<State> {
   const [scenarios, entries, runs] = await Promise.all([
     listScenarios(active.nn).catch(() => []),
     fetchLedger(active.port).catch(() => [] as LedgerEntry[]),
-    devServer && !cloud ? readRuns(`day-${active.nn}-`, since).catch(() => []) : [],
+    devServer && !cloud ? readRuns(`day-${active.nn}-`, screen.since).catch(() => []) : [],
   ]);
   state.scenarios = scenarios;
 
-  const summary = summarize(entries);
-  const facts = factsOf(summary, runs, acted);
-  const mine = sent?.day === active.nn ? sent : null;
-  const problem = mine?.problem ?? runs.some((r) => profile.before?.main.includes(r.fn));
+  // The ledger is shared by both tabs: keep to this side's calls, since this side's last send.
+  const mine = screen.sent;
+  const own = [...screen.kept, ...entries.filter((e) => onSide(side)(e) && e.at >= screen.since)];
+  const ownRuns = runs.filter(onSide(side));
+  const summary = summarize(own);
+  const facts = factsOf(summary, ownRuns, screen.acted);
+  const problem = side === "problem";
   const version = problem && profile.before ? profile.before : profile;
 
-  const tracked = runs.filter((r) => version.main.includes(r.fn));
-  const started = mine !== null || runs.length > 0;
+  const tracked = ownRuns.filter((r) => version.main.includes(r.fn));
+  const started = mine !== null || ownRuns.length > 0;
   // Cloud mode has no runs to read. A card counts as finished once its email went out and the
   // fakes have been quiet for 2 seconds; until then it is still being made.
-  const lastCall = Math.max(0, ...entries.map((e) => e.at));
+  const lastCall = Math.max(0, ...own.map((e) => e.at));
   const cloudRunning =
-    cloud && started && !sendError && !(summary.emailsSent > 0 && Date.now() - lastCall > 2000);
+    cloud && started && !screen.error && !(summary.emailsSent > 0 && Date.now() - lastCall > 2000);
   if (cloud) facts.running = cloudRunning ? 1 : 0;
   const figures = proofOf(active.nn, facts);
   const stamp = stampOf(active.nn, facts, problem);
 
-  if (started && runs.length > 0) {
-    const key = `${active.nn}:${runs.length}:${facts.running}:${entries.length}`;
-    remember(active.nn, problem, { figures, stamp }, key, !sending && facts.running === 0);
-  }
-  const stored = snapshots.get(active.nn);
-  state.compare = { problem: stored?.problem ?? null, fix: stored?.fix ?? null };
-
-  const focus = pickFocus(tracked, focusId);
-  focusId = focus?.id ?? null;
+  const focus = pickFocus(tracked, screen.focusId);
+  screen.focusId = focus?.id ?? null;
   const waitingOn = profile.action?.when;
   const action =
     waitingOn &&
@@ -256,7 +277,7 @@ async function readState(wanted: string | undefined): Promise<State> {
   state.live = {
     state: !started
       ? "idle"
-      : facts.running > 0 || (runs.length === 0 && !cloud)
+      : facts.running > 0 || (ownRuns.length === 0 && !cloud)
         ? "running"
         : facts.failed > 0 && facts.done === 0
           ? "failed"
@@ -267,20 +288,21 @@ async function readState(wanted: string | undefined): Promise<State> {
     feed: !started
       ? []
       : cloud
-        ? cloudFeed(entries, cloudRunning)
+        ? cloudFeed(own, cloudRunning)
         : feedLines(
-            runs,
+            ownRuns,
             version.main,
             version.plan,
             profile.childStep,
-            entries,
+            own,
             problem ? undefined : profile.holding,
           ),
-    card: started ? cardOf(profile, tracked, summary) : null,
+    card: started ? cardOf(profile, tracked, summary, mine) : null,
     stamp,
+    figures,
     queue: profile.queue ? queueOf(tracked, version.main[0], profile.queue, problem) : null,
     status: statusOf(active.nn, facts, {
-      entries,
+      entries: own,
       connected: cloud || state.devServer,
       inProgress: cloud ? facts.running : mainFn.filter((r) => r.status === "running").length,
     }),
@@ -295,38 +317,55 @@ async function readState(wanted: string | undefined): Promise<State> {
         version.flow,
         problem,
         Date.now(),
-        childTries(runs, version.main, profile.childStep),
+        childTries(ownRuns, version.main, profile.childStep),
       ),
-      no: String(cardNo).padStart(4, "0"),
+      no: mine?.no ?? "0000",
     };
+  screen.busy = state.live.state === "running" || screen.sending;
   return state;
 }
 
-/** Clears the screen: ledger, Dev Server runs still going, and the hidden-before line. */
-async function clearScreen(port: number, nn: string): Promise<void> {
+/**
+ * Clears one side's screen: its runs still going and its hidden-before line. The ledger is shared
+ * by both sides, so it is wiped only when the other side is not mid-run; the other side's finished
+ * results are saved first, so its tab keeps showing them.
+ */
+async function clearScreen(port: number, nn: string, side: Side): Promise<void> {
+  const screen = screenOf(nn, side);
+  const otherSide: Side = side === "problem" ? "fix" : "problem";
+  const other = screenOf(nn, otherSide);
   // Hide the old runs first, so a request that lands mid-clear never mistakes them for new ones.
-  const earlier = since;
-  since = Date.now();
-  focusId = null;
-  quiet = { key: "", since: 0 };
-  sent = null;
-  acted = false;
-  // Runs in Inngest Cloud are not ours to cancel from here; only the local Dev Server is asked.
-  if (!cloudModeFor(nn)) await cancelUnfinished(earlier).catch(() => {}); // a stalled Dev Server must not block the clear
-  await clearLedger(port);
+  const earlier = screen.since;
+  screen.since = Date.now();
+  screen.focusId = null;
+  screen.sent = null;
+  screen.acted = false;
+  screen.kept = [];
+  // Runs in Inngest Cloud are not ours to cancel from here; only this side's runs on the Dev Server.
+  const mine = (slug: string) =>
+    slug.startsWith(`day-${nn}-`) && isBefore(slug) === (side === "problem");
+  if (!cloudModeFor(nn)) await cancelUnfinished(earlier, mine).catch(() => {}); // a stalled Dev Server must not block the clear
+  if (!other.busy) {
+    const entries = await fetchLedger(port).catch(() => [] as LedgerEntry[]);
+    other.kept = [
+      ...other.kept,
+      ...entries.filter((e) => onSide(otherSide)(e) && e.at >= other.since),
+    ];
+    await clearLedger(port);
+  }
   forgetFinishedRuns();
 }
 
-/** Runs `job` as "the send in progress": the page shows "Sending..." and any error. */
-async function whileSending(job: () => Promise<void>): Promise<void> {
-  sending = true;
-  sendError = null;
+/** Runs `job` as "the send in progress" for one screen: its page shows "Sending..." and any error. */
+async function whileSending(screen: Screen, job: () => Promise<void>): Promise<void> {
+  screen.sending = true;
+  screen.error = null;
   try {
     await job();
   } catch (err) {
-    sendError = err instanceof Error ? err.message : String(err);
+    screen.error = err instanceof Error ? err.message : String(err);
   } finally {
-    sending = false;
+    screen.sending = false;
   }
 }
 
@@ -342,48 +381,60 @@ app.use(express.json());
 app.use("/ui", express.static(join(import.meta.dirname, "../../ui")));
 app.use(express.static(join(import.meta.dirname, "../public")));
 
+// One page per side of a day, so the two can sit in two browser tabs:
+//   /day/06/problem   without the lesson      /day/06/fix   with it
+// Days with no "before" have a single page, /day/04.
+function dayPage(day: string, side: string | undefined, url: string, res: express.Response) {
+  const profile = profileOf(day);
+  const query = url.includes("?") ? url.slice(url.indexOf("?")) : "";
+  if (!profile) return res.redirect(`/${query}`);
+  const wanted = profile.before ? (side === "problem" ? "problem" : "fix") : null;
+  const path = `/day/${day}${wanted ? `/${wanted}` : ""}`;
+  if (`/day/${day}${side ? `/${side}` : ""}` !== path) return res.redirect(`${path}${query}`);
+  // `root` keeps a checkout under a dot folder (like .claude/worktrees) from looking hidden.
+  res.sendFile("index.html", { root: join(import.meta.dirname, "../public") });
+}
+app.get("/day/:day", (req, res) => dayPage(req.params.day, undefined, req.url, res));
+app.get("/day/:day/:side", (req, res) => dayPage(req.params.day, req.params.side, req.url, res));
+
 app.get("/api/state", async (req, res) => {
   const day = typeof req.query.day === "string" ? req.query.day : undefined;
-  res.json(await readState(day));
+  res.json(await readState(day, req.query.side));
 });
 
 /**
- * Resets a day's screen and unfreezes its numbers, ready for a new send. Returns a message when
- * it cannot start. It claims `sending` before its first await, so a double click starts only one.
+ * Resets one side of a day's screen, ready for a new send. Returns a message when it cannot
+ * start. It claims `sending` before its first await, so a double click starts only one.
  */
 async function startSend(
   day: string,
-  problem: boolean,
+  side: Side,
   cardId: string,
   title: string,
   to: string,
 ): Promise<string | null> {
-  if (sending) return "A card is already being sent";
-  sending = true;
+  const screen = screenOf(day, side);
+  if (screen.sending) return "A card is already being sent";
+  screen.sending = true;
   try {
     const alive = (await findAliveDays()).find((d) => d.nn === day);
     if (!alive) {
-      sending = false;
+      screen.sending = false;
       return "That day is not running";
     }
-    const prior =
-      sent?.day === day ? snapshots.get(day)?.[sent.problem ? "problem" : "fix"] : undefined;
-    await clearScreen(alive.port, day);
-    if (prior && !prior.finished) prior.interrupted = true; // starting again cut that run short
+    await clearScreen(alive.port, day, side);
     cardNo += 1;
-    sent = { day, problem, cardId, title, to };
-    const stored = snapshots.get(day)?.[problem ? "problem" : "fix"];
-    if (stored) Object.assign(stored, { settled: false, interrupted: false }); // follows the new run
+    screen.sent = { cardId, title, to, no: String(cardNo).padStart(4, "0") };
     return null;
   } catch (err) {
-    sending = false;
+    screen.sending = false;
     return err instanceof Error ? err.message : String(err);
   }
 }
 
 // The send-a-card form.
 app.post("/api/send", async (req, res) => {
-  const { day, problem, form } = req.body ?? {};
+  const { day, form } = req.body ?? {};
   const profile = profileOf(day);
   if (!profile) {
     res.status(409).json({ error: "That day cannot send cards here" });
@@ -393,17 +444,17 @@ app.post("/api/send", async (req, res) => {
     res.status(409).json({ error: KEYS_MISSING.replace("{day}", day) });
     return;
   }
+  const side = sideFor(profile, req.body?.side);
   const clean = cleanForm(profile, form);
   const cardId = `card-${cardNo + 1}`;
-  const useBefore = problem === true && profile.before !== undefined;
-  const waves = wavesFor(day, profile, clean, useBefore, cardId);
-  const refusal = await startSend(day, useBefore, cardId, clean.message ?? "", clean.to ?? "");
+  const waves = wavesFor(day, profile, clean, side === "problem", cardId);
+  const refusal = await startSend(day, side, cardId, clean.message ?? "", clean.to ?? "");
   if (refusal) {
     res.status(409).json({ error: refusal });
     return;
   }
   res.status(202).json({ started: true });
-  await whileSending(() => sendWaves(day, waves));
+  await whileSending(screenOf(day, side), () => sendWaves(day, waves));
 });
 
 // The "rush" button, and the presenter's scenario list: both run a scenario from the day's send.ts.
@@ -429,34 +480,40 @@ app.post("/api/run", async (req, res) => {
     res.status(409).json({ error: cloudMessage });
     return;
   }
-  const refusal = await startSend(day, scenario.endsWith("-before"), "", "", "");
+  // A "-before" scenario belongs to the problem tab, every other one to the fix tab.
+  const side = sideFor(profile, scenario.endsWith("-before") ? "problem" : "fix");
+  const refusal = await startSend(day, side, "", "", "");
   if (refusal) {
     res.status(409).json({ error: refusal });
     return;
   }
   res.status(202).json({ started: true });
-  acted = scenario.includes("delete"); // Day 05's scenario deletes the card by itself
-  await whileSending(() => fireScenario(day, scenario));
+  const screen = screenOf(day, side);
+  screen.acted = scenario.includes("delete"); // Day 05's scenario deletes the card by itself
+  await whileSending(screen, () => fireScenario(day, scenario));
 });
 
 // A button that fits the moment: approve the card, delete it, react to it.
 app.post("/api/action", async (req, res) => {
   const { day } = req.body ?? {};
-  const action = profileOf(day)?.action;
-  if (!action || !sent || sent.day !== day || !sent.cardId) {
+  const profile = profileOf(day);
+  const action = profile?.action;
+  const screen = profile ? screenOf(day, sideFor(profile, req.body?.side)) : undefined;
+  if (!action || !screen?.sent?.cardId) {
     res.status(409).json({ error: "Nothing to do right now" });
     return;
   }
-  acted = true;
-  await sendWaves(day, [[{ name: action.event, data: { cardId: sent.cardId, ...action.data } }]]);
+  screen.acted = true;
+  await sendWaves(day, [
+    [{ name: action.event, data: { cardId: screen.sent.cardId, ...action.data } }],
+  ]);
   res.status(202).json({ started: true });
 });
 
 app.post("/api/clear", async (req, res) => {
   const { day } = req.body ?? {};
   const alive = (await findAliveDays()).find((d) => d.nn === day);
-  if (alive) await clearScreen(alive.port, day);
-  snapshots.delete(day);
+  if (alive) await clearScreen(alive.port, day, sideFor(profileOf(day), req.body?.side));
   res.status(204).end();
 });
 

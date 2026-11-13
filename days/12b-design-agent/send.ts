@@ -36,8 +36,8 @@ async function ledger(): Promise<LedgerEntry[]> {
 
 const c1 = {
   cardId: "c1",
-  prompt: "Merry Christmas, Grandma. Thanks for the cookies!",
-  to: "grandma@example.com",
+  prompt: "Happy holidays, Sam!",
+  to: "sam@example.com",
 };
 
 export const scenarios: Record<string, Scenario> = {

@@ -25,11 +25,11 @@ export type Field = {
 
 /** Every field the form can show. A day picks from this list. */
 export const FIELDS: Record<Exclude<FieldId, "trouble">, Field> = {
-  to: { label: "Who is it for?", kind: "text", placeholder: "grandma@example.com" },
+  to: { label: "Send to", kind: "text", placeholder: "sam@example.com" },
   message: {
-    label: "What's the idea?",
+    label: "What should it say?",
     kind: "textarea",
-    placeholder: "A sentence or two is plenty",
+    placeholder: "Happy holidays, Sam",
   },
   tone: {
     label: "Tone",
@@ -123,8 +123,8 @@ export type Profile = {
   needsCloud?: boolean; // runs locally, but the studio follows it in Inngest Cloud when keys are set
 };
 
-const MESSAGE = "Warm wishes for a cozy, quiet season";
-const TO = "grandma@example.com";
+const MESSAGE = "Happy holidays, Sam!";
+const TO = "sam@example.com";
 const cardFields: FieldId[] = ["to", "message", "tone"];
 
 export const PROFILES: Record<string, Profile> = {
@@ -145,9 +145,8 @@ export const PROFILES: Record<string, Profile> = {
       main: ["create-card-before"],
       plan: ["moderate", "write-text", "render-image", "deliver"],
     },
-    fields: [...cardFields, "trouble"],
-    defaults: { to: TO, message: "A card from the Grinch", tone: "classic", trouble: "off" },
-    trouble: { label: "Writing service", off: "Normal", on: "Busy: asks us to wait 5 s" },
+    fields: cardFields,
+    defaults: { to: TO, message: "A card from the Grinch", tone: "classic" },
     main: ["create-card", "create-card-failure"],
     plan: ["moderate", "write-text", "render-image", "deliver"],
     tip: "Try an idea with the Grinch in it, then one without.",
@@ -227,10 +226,9 @@ export const PROFILES: Record<string, Profile> = {
     },
     shortcut: {
       label: "Send a rush of cards",
-      hint: "20 from Acme, then 1 from Brightside",
+      hint: "20 cards from Acme, then 1 from Brightside",
       scenario: "noisy-neighbor",
     },
-    tip: "One card is easy. A rush shows who waits.",
     showsCard: true,
   },
   "07": {
@@ -248,7 +246,6 @@ export const PROFILES: Record<string, Profile> = {
     childStep: "render",
     flow: { name: "throttle", detail: "4 image calls per 10 seconds" },
     shortcut: { label: "Send a rush of cards", hint: "15 cards at once", scenario: "burst" },
-    tip: "One card is easy. A rush shows the image service's limit.",
     showsCard: true,
   },
   "08": {
@@ -260,10 +257,10 @@ export const PROFILES: Record<string, Profile> = {
       flow: { name: "no debounce", detail: "every keystroke starts a run" },
     },
     fields: ["message", "edits"],
-    defaults: { message: "Warm wishes for a cozy, quiet season", edits: "8" },
+    defaults: { message: MESSAGE, edits: "8" },
     main: ["regenerate-preview"],
     plan: ["write-preview"],
-    holding: "Waiting for you to finish editing. Your preview updates after 3 quiet seconds.",
+    holding: "Waiting for you to stop typing. Your preview updates then.",
     flow: { name: "debounce", detail: "3 quiet seconds per card" },
     showsCard: true,
   },
@@ -313,7 +310,6 @@ export const PROFILES: Record<string, Profile> = {
       hint: "20 free cards, then 2 pro cards",
       scenario: "pro-arrives-late",
     },
-    tip: "One card is easy. A rush shows who goes first.",
     showsCard: true,
   },
   "11": {
@@ -328,7 +324,7 @@ export const PROFILES: Record<string, Profile> = {
     defaults: { opens: "120" },
     main: ["record-opens"],
     plan: ["insert-opens"],
-    holding: "Collecting card opens. They are recorded together, every 50 or 5 seconds.",
+    holding: "Collecting card opens, then recording them together.",
     flow: { name: "batchEvents", detail: "50 opens or 5 seconds" },
     shortcut: { label: "120 opens in 2 seconds", hint: "Six waves of 20", scenario: "opens-120" },
     showsCard: false,
@@ -354,7 +350,7 @@ export const PROFILES: Record<string, Profile> = {
     },
     shortcut: {
       label: "Test 40 cards",
-      hint: "Each recipient reacts; warm pulls ahead",
+      hint: "Each recipient reacts to their card",
       scenario: "experiment-40",
     },
     showsCard: true,
